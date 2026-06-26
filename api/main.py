@@ -11,9 +11,11 @@ from pathlib import Path
 from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 from console import integrations as ig  # noqa: E402
 
 app = FastAPI(
@@ -21,6 +23,7 @@ app = FastAPI(
     version="1.0.0",
     description="Unified endpoint for PhishGuard, ResumeShield, SiteGuard and BreachRadar.",
 )
+WEB_DIR = ROOT / "web"
 
 
 # ---- Schemas --------------------------------------------------------------
@@ -87,3 +90,8 @@ def breachradar_check(inp: EmailIn):
 @app.get("/breachradar/scan-org")
 def breachradar_org():
     return ig.breachradar_scan_org()
+
+
+# ---- Static web frontend (mounted LAST so API routes take precedence) -----
+if WEB_DIR.exists():
+    app.mount("/", StaticFiles(directory=str(WEB_DIR), html=True), name="web")

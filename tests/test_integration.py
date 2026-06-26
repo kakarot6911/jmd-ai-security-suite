@@ -64,6 +64,17 @@ def test_integration_adapter_consistency():
     assert a["risk_score"] == b["risk_score"]
 
 
+def test_web_frontend_present_and_mounted():
+    root = Path(__file__).resolve().parents[1]
+    for f in ("web/index.html", "web/styles.css", "web/app.js"):
+        assert (root / f).exists(), f"missing {f}"
+    # the static site must be mounted on the app so the backend serves it
+    import api.main as apimod
+    assert apimod.WEB_DIR.exists()
+    mounts = [r for r in apimod.app.routes if getattr(r, "name", "") == "web"]
+    assert mounts, "web StaticFiles mount not registered"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

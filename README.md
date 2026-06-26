@@ -19,14 +19,23 @@ with AI/ML, threat intelligence, SOC workflows, technical reports*).
 
 ---
 
-## ⭐ Unified premium console
+## ⭐ Interactive website
 
-All four tools live behind a single dark, premium **Security Console** and one REST API:
+A fast, premium **single-page web app** (vanilla JS, animated SVG gauges, live `fetch`
+to the API — no page reloads) is served directly by the FastAPI backend:
 
 ```bash
 cd ~/jmd_security_suite
-./run.sh console   # 🛡️ premium unified dashboard  → http://localhost:8501
-./run.sh api       # unified REST API (FastAPI)    → http://localhost:8000/docs
+./run.sh web       # 🌐 interactive website + API → http://localhost:8000
+```
+
+![JMD Security Console website — live KPIs, animated gauges and risk charts](docs/website.png)
+
+There is also a Streamlit version of the console:
+
+```bash
+./run.sh console   # 🛡️ premium Streamlit dashboard → http://localhost:8501
+./run.sh api       # REST API only (also serves the website) → http://localhost:8000/docs
 ```
 
 The console has an **Overview** page (live KPIs + tool cards + exposure snapshot) and a

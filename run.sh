@@ -3,8 +3,9 @@
 #   ./run.sh setup          install deps into .venv
 #   ./run.sh test           run all test suites
 #   ./run.sh data           (re)generate datasets/corpora
-#   ./run.sh console        launch the unified PREMIUM console (all 4 tools)
-#   ./run.sh api            launch the unified REST API (FastAPI)
+#   ./run.sh web            launch the interactive WEBSITE + API (open http://localhost:8000)
+#   ./run.sh console        launch the unified PREMIUM console (Streamlit, all 4 tools)
+#   ./run.sh api            launch the unified REST API (FastAPI; also serves the website)
 #   ./run.sh resumeshield   launch ResumeShield dashboard
 #   ./run.sh siteguard      launch SiteGuard dashboard
 #   ./run.sh breachradar    launch BreachRadar dashboard
@@ -31,7 +32,7 @@ case "${1:-help}" in
     $PY tests/test_integration.py
     ;;
   console)      $ST run console/app.py ;;
-  api)          $UV api.main:app --port 8000 ;;
+  web|api)      echo "→ Website:  http://localhost:8000" && echo "→ API docs: http://localhost:8000/docs" && $UV api.main:app --port 8000 ;;
   resumeshield) $ST run resumeshield/app.py ;;
   siteguard)    $ST run siteguard/app.py ;;
   breachradar)  $ST run breachradar/app.py ;;

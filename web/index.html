@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JMD Security Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<aside class="sidebar">
+  <div class="brand">🛡️ JMD <span class="g">Security</span></div>
+  <div class="brand-sub">Unified Security Console</div>
+  <nav class="nav" id="nav">
+    <button data-view="home" class="active">🏠 Overview</button>
+    <button data-view="phishguard">🛡️ PhishGuard</button>
+    <button data-view="resumeshield">🪪 ResumeShield</button>
+    <button data-view="siteguard">🔐 SiteGuard</button>
+    <button data-view="breachradar">📡 BreachRadar</button>
+  </nav>
+  <div class="status">
+    <div class="lab" id="statusLab">Modules</div>
+    <div id="statusList"></div>
+  </div>
+</aside>
+
+<main>
+  <!-- OVERVIEW -->
+  <section id="view-home" class="view active">
+    <div class="hero">
+      <div class="eyebrow">JMD The Career Maker · Security</div>
+      <h1>Security Operations Console</h1>
+      <p>One pane of glass for recruitment-fraud, candidate-data protection, web posture and
+         credential-exposure monitoring across JMD The Career Maker.</p>
+    </div>
+    <div class="grid g4" id="kpis"></div>
+    <div class="split" style="margin-top:18px">
+      <div class="tile center" id="orgDonut"><span class="muted">loading…</span></div>
+      <div>
+        <div class="sec"><span class="bar"></span><h4>Account risk distribution</h4></div>
+        <div class="bars" id="orgBars"></div>
+      </div>
+    </div>
+    <div class="sec"><span class="bar"></span><h4>Security modules</h4></div>
+    <div class="grid g2" id="toolCards"></div>
+    <div class="foot">JMD Security Suite · PhishGuard · ResumeShield · SiteGuard · BreachRadar —
+      synthetic data · safe by default</div>
+  </section>
+
+  <!-- PHISHGUARD -->
+  <section id="view-phishguard" class="view">
+    <div class="hero"><div class="eyebrow">AI Threat Detection</div><h1>PhishGuard</h1>
+      <p>Detect fake job offers, recruitment scams and phishing that impersonate the firm.</p></div>
+    <div class="samples" id="phishSamples"></div>
+    <div class="row">
+      <div><label>Sender email</label><input type="text" id="phSender" placeholder="recruiter@company.com"></div>
+      <div><label>Claimed company</label><input type="text" id="phCompany" placeholder="Company claimed"></div>
+    </div>
+    <label>Message / job offer</label>
+    <textarea id="phText" placeholder="Paste a recruitment email or job offer…"></textarea>
+    <div style="margin-top:14px"><button class="btn" id="phBtn">🔍 Analyze message</button></div>
+    <div id="phResult" style="margin-top:18px"></div>
+  </section>
+
+  <!-- RESUMESHIELD -->
+  <section id="view-resumeshield" class="view">
+    <div class="hero"><div class="eyebrow">Data Protection</div><h1>ResumeShield</h1>
+      <p>Redact candidate PII and check DPDP Act 2023 compliance before sharing a resume.</p></div>
+    <label>Reveal last N characters: <span id="rsKeepVal">0</span> (0 = full redaction)</label>
+    <input type="range" id="rsKeep" min="0" max="4" value="0" style="width:240px">
+    <label>Resume text</label>
+    <textarea id="rsText"></textarea>
+    <div style="margin-top:14px"><button class="btn" id="rsBtn">🛡️ Scan & redact</button></div>
+    <div id="rsResult" style="margin-top:18px"></div>
+  </section>
+
+  <!-- SITEGUARD -->
+  <section id="view-siteguard" class="view">
+    <div class="hero"><div class="eyebrow">Vulnerability Assessment</div><h1>SiteGuard</h1>
+      <p>Passive, non-intrusive security-posture scan of the firm's website and candidate portal.</p></div>
+    <div class="row">
+      <div><label>Mode</label>
+        <select id="sgMode"><option value="demo">Offline demo</option><option value="live">Live scan (authorized)</option></select></div>
+      <div id="sgDemoWrap"><label>Demo target</label>
+        <select id="sgDemo"><option value="vulnerable">vulnerable</option><option value="hardened">hardened</option></select></div>
+      <div id="sgUrlWrap" style="display:none"><label>Target URL</label>
+        <input type="text" id="sgUrl" placeholder="https://www.jmdcareermaker.com"></div>
+    </div>
+    <div id="sgAuthWrap" style="display:none;margin-top:8px">
+      <label><input type="checkbox" id="sgAuth" style="width:auto"> I confirm I own this domain or am authorized to test it.</label>
+    </div>
+    <div style="margin-top:14px"><button class="btn" id="sgBtn">▶️ Run scan</button></div>
+    <div id="sgResult" style="margin-top:18px"></div>
+  </section>
+
+  <!-- BREACHRADAR -->
+  <section id="view-breachradar" class="view">
+    <div class="hero"><div class="eyebrow">Threat Intelligence</div><h1>BreachRadar</h1>
+      <p>Privacy-preserving credential-exposure monitoring for staff and recruiter accounts.</p></div>
+    <div class="row">
+      <div><label>Email address</label><input type="email" id="brEmail" value="akash.mishra@jmdcareermaker.com"></div>
+    </div>
+    <div style="margin-top:14px">
+      <button class="btn" id="brBtn">🔎 Check exposure</button>
+      <button class="btn ghost" id="brOrgBtn">📡 Scan organisation</button>
+    </div>
+    <div id="brResult" style="margin-top:18px"></div>
+  </section>
+</main>
+
+<div id="toast"></div>
+<script src="app.js"></script>
+</body>
+</html>
