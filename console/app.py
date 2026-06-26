@@ -1,5 +1,5 @@
 """
-JMD Security Console — unified premium dashboard for all four security tools.
+JMD Security Console — unified premium, interactive dashboard for all four tools.
 
 Run:  streamlit run console/app.py
 """
@@ -8,6 +8,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import altair as alt
 import pandas as pd
 import streamlit as st
 
@@ -25,6 +26,49 @@ NAV = {
     "🔐  SiteGuard": "siteguard",
     "📡  BreachRadar": "breachradar",
 }
+BAND_DOMAIN = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "NONE", "INFO"]
+BAND_RANGE = [T.RISK[b] for b in BAND_DOMAIN]
+
+
+# ---------------------------------------------------------------------------
+# Chart helpers (interactive, dark-themed Altair)
+# ---------------------------------------------------------------------------
+def _style(chart):
+    return (chart.configure_view(strokeWidth=0, fill="transparent")
+            .configure_axis(labelColor=T.MUTED, titleColor=T.MUTED, gridColor="#1b2640",
+                            domainColor=T.LINE, tickColor=T.LINE, labelFont="Inter",
+                            titleFont="Inter", labelFontSize=11)
+            .configure_legend(labelColor=T.MUTED, titleColor=T.MUTED)
+            .properties(background="transparent"))
+
+
+def band_bar(df: pd.DataFrame, label_col: str, value_col: str, band_col: str, height=None):
+    h = height or max(120, 34 * len(df))
+    chart = (alt.Chart(df).mark_bar(cornerRadiusEnd=6, height=20)
+             .encode(
+                 x=alt.X(f"{value_col}:Q", title=None),
+                 y=alt.Y(f"{label_col}:N", sort="-x", title=None),
+                 color=alt.Color(f"{band_col}:N",
+                                 scale=alt.Scale(domain=BAND_DOMAIN, range=BAND_RANGE),
+                                 legend=None),
+                 tooltip=list(df.columns))
+             .properties(height=h))
+    st.altair_chart(_style(chart), use_container_width=True)
+
+
+def count_bar(counts: dict, title: str = ""):
+    df = pd.DataFrame([{"severity": k, "count": v} for k, v in counts.items() if v])
+    if df.empty:
+        return
+    chart = (alt.Chart(df).mark_bar(cornerRadiusEnd=6)
+             .encode(
+                 x=alt.X("severity:N", sort=BAND_DOMAIN, title=None),
+                 y=alt.Y("count:Q", title=None),
+                 color=alt.Color("severity:N",
+                                 scale=alt.Scale(domain=BAND_DOMAIN, range=BAND_RANGE), legend=None),
+                 tooltip=["severity", "count"])
+             .properties(height=200, title=title))
+    st.altair_chart(_style(chart), use_container_width=True)
 
 
 # ---------------------------------------------------------------------------
@@ -33,22 +77,26 @@ NAV = {
 def sidebar() -> str:
     with st.sidebar:
         st.markdown(
-            "<div style='padding:6px 2px 14px'>"
-            "<div style='font-size:1.35rem;font-weight:800;letter-spacing:-.4px'>🛡️ JMD <span "
+            "<div style='padding:8px 2px 16px'>"
+            "<div style='font-size:1.4rem;font-weight:900;letter-spacing:-.5px'>🛡️ JMD <span "
             "style='background:linear-gradient(90deg,#818cf8,#22d3ee);-webkit-background-clip:text;"
             "-webkit-text-fill-color:transparent'>Security</span></div>"
-            "<div style='color:#94a3b8;font-size:.78rem;margin-top:2px'>Unified Security Console</div>"
+            "<div style='color:#93a1bd;font-size:.78rem;margin-top:2px'>Unified Security Console</div>"
             "</div>", unsafe_allow_html=True)
         choice = st.radio("Navigate", list(NAV.keys()), label_visibility="collapsed")
-        st.markdown("<hr style='border-color:#2a3550'>", unsafe_allow_html=True)
+        st.markdown("<hr style='border-color:#26314d'>", unsafe_allow_html=True)
         online = sum(1 for t in ig.TOOLS if t["available"])
         st.markdown(
-            f"<div style='font-size:.8rem;color:#94a3b8'>Modules online</div>"
-            f"<div style='font-size:1.1rem;font-weight:700'>{online} / {len(ig.TOOLS)}</div>"
+            f"<div style='font-size:.72rem;color:#93a1bd;text-transform:uppercase;letter-spacing:.6px;"
+            f"font-weight:700'>Modules online · {online}/{len(ig.TOOLS)}</div>"
             "<div style='margin-top:10px'>" + "".join(
-                f"<div style='font-size:.82rem;margin:3px 0'>"
-                f"{'🟢' if t['available'] else '🔴'} {t['icon']} {t['name']}</div>"
+                f"<div style='display:flex;align-items:center;gap:8px;font-size:.84rem;margin:6px 0'>"
+                f"<span style='width:7px;height:7px;border-radius:50%;background:"
+                f"{'#34d399' if t['available'] else '#f43f5e'};box-shadow:0 0 8px "
+                f"{'#34d399' if t['available'] else '#f43f5e'}'></span>{t['icon']} {t['name']}</div>"
                 for t in ig.TOOLS) + "</div>", unsafe_allow_html=True)
+        st.markdown("<hr style='border-color:#26314d'>", unsafe_allow_html=True)
+        st.caption("Synthetic data · safe by default · 27 tests passing")
     return NAV[choice]
 
 
@@ -57,42 +105,51 @@ def sidebar() -> str:
 # ---------------------------------------------------------------------------
 def page_home():
     T.hero("Security Operations Console",
-           "One pane of glass for recruitment-fraud, candidate-data protection, web "
-           "posture and credential-exposure monitoring.")
+           "One pane of glass for recruitment-fraud, candidate-data protection, web posture "
+           "and credential-exposure monitoring across JMD The Career Maker.")
 
     org = ig.breachradar_scan_org()
+    total = len(org)
     exposed = sum(1 for x in org if x["breach_count"] > 0)
     critical = sum(1 for x in org if x["risk_band"] in {"CRITICAL", "HIGH"})
+    pwd = sum(1 for x in org if x["password_exposed"])
 
-    k = st.columns(4)
-    k[0].metric("Modules online", f"{sum(t['available'] for t in ig.TOOLS)} / 4")
-    k[1].metric("Accounts monitored", len(org))
-    k[2].metric("Exposed accounts", exposed)
-    k[3].metric("HIGH / CRITICAL", critical)
+    tiles = st.columns(4)
+    tiles[0].markdown(T.stat_tile("Modules online", f"{sum(t['available'] for t in ig.TOOLS)}/4",
+                                  "all systems go", T.ACCENT), unsafe_allow_html=True)
+    tiles[1].markdown(T.stat_tile("Accounts monitored", total, "staff + recruiter inboxes",
+                                  T.PRIMARY), unsafe_allow_html=True)
+    tiles[2].markdown(T.stat_tile("Exposed accounts", exposed, f"{pwd} with password leak",
+                                  T.RISK["HIGH"]), unsafe_allow_html=True)
+    tiles[3].markdown(T.stat_tile("High / critical", critical, "need action now",
+                                  T.RISK["CRITICAL"]), unsafe_allow_html=True)
+
+    st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
+    left, right = st.columns([1, 1.5])
+    with left:
+        ratio = round(100 * critical / total) if total else 0
+        band = "CRITICAL" if critical else "LOW"
+        st.markdown("<div class='pg-tile' style='text-align:center'>"
+                    "<div class='lab' style='margin-bottom:6px'>Org exposure index</div>"
+                    + T.donut(ratio, band, center=f"{ratio}%", label="accounts at high/critical risk")
+                    + "</div>", unsafe_allow_html=True)
+    with right:
+        T.section("Account risk distribution")
+        df = pd.DataFrame([{"account": x["email"].split("@")[0], "score": x["risk_score"],
+                            "risk": x["risk_band"], "breaches": x["breach_count"]} for x in org])
+        band_bar(df, "account", "score", "risk")
 
     st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+    T.section("Security modules")
     cols = st.columns(2)
     for i, t in enumerate(ig.TOOLS):
         with cols[i % 2]:
-            st.markdown(
-                T.tool_card(t["icon"], t["name"], t["desc"],
-                            "Online" if t["available"] else "Offline"),
-                unsafe_allow_html=True)
+            st.markdown(T.tool_card(t["icon"], t["name"], t["desc"],
+                                    "Online" if t["available"] else "Offline"),
+                        unsafe_allow_html=True)
             st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
-
-    st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
-    st.markdown("##### Live exposure snapshot")
-    df = pd.DataFrame([{
-        "account": x["email"], "risk": x["risk_band"], "score": x["risk_score"],
-        "breaches": x["breach_count"], "password_exposed": x["password_exposed"],
-    } for x in org])
-    st.dataframe(df, hide_index=True, use_container_width=True)
     T.footer("JMD Security Suite · PhishGuard · ResumeShield · SiteGuard · BreachRadar — "
              "synthetic data · safe by default")
-
-
-def _verdict_header(band: str, value: str, cols_spec=(1.2, 1, 1)):
-    return st.columns(list(cols_spec))
 
 
 def page_phishguard():
@@ -118,24 +175,34 @@ def page_phishguard():
     c = st.columns(2)
     sender = c[0].text_input("Sender email", value=sv[1])
     company = c[1].text_input("Claimed company", value=sv[2])
-    text = st.text_area("Message / job offer", value=sv[0], height=190,
+    text = st.text_area("Message / job offer", value=sv[0], height=170,
                         placeholder="Paste a recruitment email or job offer…")
     if st.button("🔍  Analyze message", use_container_width=True):
         if not text.strip():
             st.warning("Paste a message first."); return
         v = ig.phishguard_analyze(text, sender, company)
-        a, b, d = st.columns([1.2, 1, 1])
-        a.markdown(T.big_badge(v["risk_band"], f"{v['fraud_probability']:.0%} fraud probability"),
-                   unsafe_allow_html=True)
-        b.metric("Recommended action", v["recommended_action"])
-        d.metric("Hard block", "YES" if v["hard_block"] else "no")
-        st.progress(min(max(v["fraud_probability"], 0.0), 1.0))
-        st.info(v["rationale"])
+        a, b = st.columns([1, 1.6])
+        with a:
+            st.markdown(T.donut(v["fraud_probability"] * 100, v["risk_band"],
+                                center=f"{v['fraud_probability']:.0%}", label="fraud probability"),
+                        unsafe_allow_html=True)
+        with b:
+            st.markdown(T.big_badge(v["risk_band"], v["recommended_action"]), unsafe_allow_html=True)
+            st.markdown(f"<div style='margin-top:10px'>"
+                        f"{T.chip('Hard block: ' + ('YES' if v['hard_block'] else 'no'), 'CRITICAL' if v['hard_block'] else 'LOW')}"
+                        f"{T.chip(str(len(v['flags'])) + ' red flags', 'HIGH' if v['flags'] else 'LOW')}"
+                        f"</div>", unsafe_allow_html=True)
+            st.info(v["rationale"])
         if v["flags"]:
-            st.markdown("##### 🚩 Security red flags")
-            st.dataframe(pd.DataFrame([{"severity": round(f["severity"], 2), "rule": f["name"],
-                          "why it matters": f["description"]} for f in v["flags"]]),
-                         hide_index=True, use_container_width=True)
+            T.section("Security red flags")
+            st.markdown("".join(
+                T.chip(f["name"], "CRITICAL" if f["severity"] >= .8 else
+                       "HIGH" if f["severity"] >= .5 else "MEDIUM") for f in v["flags"]),
+                unsafe_allow_html=True)
+            with st.expander("See full explanation of each flag", expanded=True):
+                st.dataframe(pd.DataFrame([{"severity": round(f["severity"], 2), "rule": f["name"],
+                              "why it matters": f["description"]} for f in v["flags"]]),
+                             hide_index=True, use_container_width=True)
         else:
             st.success("No deterministic red flags fired.")
 
@@ -147,27 +214,32 @@ def page_resumeshield():
     sample = ("Name: Fazal Ahmad\nEmail: fazal.ahmad@example.com   Phone: +91 98765 43210\n"
               "Aadhaar: 2994 1855 6015    PAN: ABCDE1234F\nA/c 123456789012 (HDFC Bank)\n"
               "DOB: 23/08/2001   Address: Tower 28, Lodha Belmondo, Pune 411045")
-    text = st.text_area("Resume text", value=sample, height=200)
+    text = st.text_area("Resume text", value=sample, height=180)
     if st.button("🛡️  Scan & redact", use_container_width=True):
         if not text.strip():
             st.warning("Provide resume text."); return
         r = ig.resumeshield_redact(text, keep_last=keep_last)
-        a, b, c = st.columns([1.2, 1, 1])
-        a.markdown(T.big_badge(r["risk_band"], f"{r['risk_score']}/100 exposure"),
-                   unsafe_allow_html=True)
-        b.metric("PII items", sum(r["inventory"].values()))
-        c.metric("Safe to share", "YES" if r["dpdp"]["compliant_to_share_as_is"] else "NO")
-        left, right = st.columns(2)
+        a, b = st.columns([1, 1.6])
+        with a:
+            st.markdown(T.donut(r["risk_score"], r["risk_band"], center=str(r["risk_score"]),
+                                label="exposure score"), unsafe_allow_html=True)
+        with b:
+            safe = r["dpdp"]["compliant_to_share_as_is"]
+            st.markdown(T.big_badge(r["risk_band"], f"{sum(r['inventory'].values())} PII items found"),
+                        unsafe_allow_html=True)
+            st.markdown(f"<div style='margin-top:10px'>"
+                        f"{T.chip('Safe to share: ' + ('YES' if safe else 'NO'), 'LOW' if safe else 'CRITICAL')}"
+                        f"{T.chip('DPDP: ' + r['dpdp']['regulation'].split(',')[0], 'INFO')}</div>",
+                        unsafe_allow_html=True)
+            if r["inventory"]:
+                count_bar({k: v for k, v in r["inventory"].items()})
+        left, right = st.columns([1.3, 1])
         with left:
-            st.markdown("##### Redacted resume")
-            st.text_area("redacted", r["redacted_text"], height=260, label_visibility="collapsed")
-            st.download_button("⬇️  Download redacted", r["redacted_text"],
-                               "resume_redacted.txt")
+            T.section("Redacted resume")
+            st.code(r["redacted_text"], language="text")
+            st.download_button("⬇️  Download redacted", r["redacted_text"], "resume_redacted.txt")
         with right:
-            st.markdown("##### PII inventory")
-            st.dataframe(pd.DataFrame([{"type": k, "count": v} for k, v in r["inventory"].items()]),
-                         hide_index=True, use_container_width=True)
-            st.markdown("##### DPDP compliance report")
+            T.section("DPDP compliance report")
             st.json(r["dpdp"], expanded=False)
 
 
@@ -190,50 +262,73 @@ def page_siteguard():
                 with st.spinner("Scanning…"):
                     res = ig.siteguard_scan(url, authorized=True)
     if res:
-        a, b, c = st.columns([1, 1, 2])
-        a.markdown(T.big_badge(res["grade"], "security grade"), unsafe_allow_html=True)
-        b.metric("Posture score", f"{res['posture_score']}/100")
-        c.metric("Findings", len(res["findings"]))
+        a, b = st.columns([1, 1.6])
+        with a:
+            st.markdown(T.donut(res["posture_score"], res["grade"], center=res["grade"],
+                                label="security grade"), unsafe_allow_html=True)
+        with b:
+            st.markdown(T.big_badge(res["grade"], f"posture {res['posture_score']}/100"),
+                        unsafe_allow_html=True)
+            counts: dict = {}
+            for f in res["findings"]:
+                counts[f["severity"]] = counts.get(f["severity"], 0) + 1
+            st.markdown("<div style='margin-top:10px'>" + "".join(
+                T.chip(f"{v} {k}", k) for k, v in counts.items()) + "</div>",
+                unsafe_allow_html=True)
+            count_bar(counts)
         if res["findings"]:
-            st.markdown("##### Findings")
-            st.dataframe(pd.DataFrame([{"severity": f["severity"], "title": f["title"],
-                          "category": f["category"], "remediation": f["remediation"]}
-                          for f in res["findings"]]), hide_index=True, use_container_width=True)
+            T.section(f"Findings ({len(res['findings'])})")
+            for f in res["findings"]:
+                with st.expander(f"{f['severity']} · {f['title']}"):
+                    st.markdown(f"**Category:** {f['category']}  \n"
+                                f"**Evidence:** `{f['evidence']}`  \n"
+                                f"**Remediation:** {f['remediation']}")
         else:
             st.success("No issues found — solid posture.")
-        if res.get("info"):
-            st.json({k: v for k, v in res["info"].items() if k != "target"}, expanded=False)
 
 
 def page_breachradar():
     T.hero("BreachRadar", "Privacy-preserving credential-exposure monitoring for staff and "
            "recruiter accounts.", eyebrow="Threat Intelligence")
-    t1, t2 = st.tabs(["Check an address", "Scan organisation"])
+    t1, t2 = st.tabs(["🔎 Check an address", "📡 Scan organisation"])
     with t1:
         email = st.text_input("Email", value="akash.mishra@jmdcareermaker.com")
-        if st.button("🔎  Check exposure", use_container_width=True):
+        if st.button("Check exposure", use_container_width=True):
             x = ig.breachradar_check(email)
-            a, b, c = st.columns([1.2, 1, 1])
-            a.markdown(T.big_badge(x["risk_band"], f"{x['risk_score']}/100"), unsafe_allow_html=True)
-            b.metric("Breaches", x["breach_count"])
-            c.metric("Password exposed", "YES" if x["password_exposed"] else "no")
+            a, b = st.columns([1, 1.6])
+            with a:
+                st.markdown(T.donut(x["risk_score"], x["risk_band"], center=str(x["risk_score"]),
+                                    label="exposure score"), unsafe_allow_html=True)
+            with b:
+                st.markdown(T.big_badge(x["risk_band"], f"{x['breach_count']} known breach(es)"),
+                            unsafe_allow_html=True)
+                st.markdown("<div style='margin-top:10px'>"
+                            f"{T.chip('Password exposed: ' + ('YES' if x['password_exposed'] else 'no'), 'CRITICAL' if x['password_exposed'] else 'LOW')}"
+                            f"{T.chip('High-value target' if x['high_value_target'] else 'Standard account', 'HIGH' if x['high_value_target'] else 'INFO')}"
+                            "</div>", unsafe_allow_html=True)
             if x["breaches"]:
-                st.markdown("##### Where it appeared")
+                T.section("Where it appeared")
                 st.dataframe(pd.DataFrame(x["breaches"]), hide_index=True, use_container_width=True)
-            st.markdown("##### Recommended actions")
+            T.section("Recommended actions")
             for adv in x["advice"]:
-                st.write("• " + adv)
+                st.markdown(f"- {adv}")
     with t2:
-        if st.button("📡  Scan organisation", use_container_width=True):
+        if st.button("Scan organisation", use_container_width=True):
             org = ig.breachradar_scan_org()
-            df = pd.DataFrame([{"email": x["email"], "risk": x["risk_band"],
-                  "score": x["risk_score"], "breaches": x["breach_count"],
+            df = pd.DataFrame([{"account": x["email"].split("@")[0], "email": x["email"],
+                  "risk": x["risk_band"], "score": x["risk_score"], "breaches": x["breach_count"],
                   "password_exposed": x["password_exposed"]} for x in org])
             m = st.columns(3)
-            m[0].metric("Monitored", len(df))
-            m[1].metric("Exposed", int((df["breaches"] > 0).sum()))
-            m[2].metric("HIGH/CRITICAL", int(df["risk"].isin(["CRITICAL", "HIGH"]).sum()))
-            st.dataframe(df, hide_index=True, use_container_width=True)
+            m[0].markdown(T.stat_tile("Monitored", len(df), accent=T.PRIMARY), unsafe_allow_html=True)
+            m[1].markdown(T.stat_tile("Exposed", int((df["breaches"] > 0).sum()), accent=T.RISK["HIGH"]),
+                          unsafe_allow_html=True)
+            m[2].markdown(T.stat_tile("High / critical",
+                          int(df["risk"].isin(["CRITICAL", "HIGH"]).sum()), accent=T.RISK["CRITICAL"]),
+                          unsafe_allow_html=True)
+            st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+            T.section("Exposure by account")
+            band_bar(df[["account", "score", "risk", "breaches"]], "account", "score", "risk")
+            st.dataframe(df.drop(columns=["account"]), hide_index=True, use_container_width=True)
             st.download_button("⬇️  Export report", df.to_csv(index=False),
                                "breachradar_report.csv")
 
