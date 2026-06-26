@@ -13,7 +13,9 @@ with AI/ML, threat intelligence, SOC workflows, technical reports*).
 | 📡 **BreachRadar** | Staff/recruiter accounts (HR, careers, finance) may already be exposed in data breaches. | Threat intelligence / SOC |
 
 > A complementary fourth tool, **PhishGuard** (recruitment-fraud & phishing
-> detection), lives in `~/jmd_phishguard/`.
+> detection), lives in a separate repo: [`jmd-phishguard`](https://github.com/gdfazal/jmd-phishguard).
+
+![JMD Security Console — unified dashboard showing live output from all four tools](docs/console.png)
 
 ---
 
