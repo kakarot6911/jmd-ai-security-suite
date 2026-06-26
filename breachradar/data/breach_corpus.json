@@ -1,0 +1,323 @@
+{
+  "breaches": {
+    "CareerPortalLeak2025": {
+      "date": "2025-11-02",
+      "severity": "HIGH",
+      "classes": [
+        "email",
+        "password",
+        "phone"
+      ]
+    },
+    "JobBoardDump2024": {
+      "date": "2024-06-20",
+      "severity": "HIGH",
+      "classes": [
+        "email",
+        "password"
+      ]
+    },
+    "OldForum2019": {
+      "date": "2019-03-11",
+      "severity": "MEDIUM",
+      "classes": [
+        "email",
+        "username"
+      ]
+    },
+    "MarketingList2023": {
+      "date": "2023-09-01",
+      "severity": "LOW",
+      "classes": [
+        "email"
+      ]
+    },
+    "CloudBucket2022": {
+      "date": "2022-12-15",
+      "severity": "MEDIUM",
+      "classes": [
+        "email",
+        "password"
+      ]
+    }
+  },
+  "org_domain": "jmdcareermaker.com",
+  "org_emails": [
+    "info@jmdcareermaker.com",
+    "akash.mishra@jmdcareermaker.com",
+    "hr@jmdcareermaker.com",
+    "careers@jmdcareermaker.com",
+    "finance@jmdcareermaker.com",
+    "fazal.ahmad@jmdcareermaker.com",
+    "neha.gupta@jmdcareermaker.com",
+    "admin@jmdcareermaker.com"
+  ],
+  "hash_index": {
+    "22DCE0D6F381860E253156DC7C6B905A411183B1": [
+      {
+        "breach": "CareerPortalLeak2025",
+        "password_exposed": true
+      },
+      {
+        "breach": "JobBoardDump2024",
+        "password_exposed": true
+      },
+      {
+        "breach": "JobBoardDump2024",
+        "password_exposed": true
+      },
+      {
+        "breach": "OldForum2019",
+        "password_exposed": false
+      }
+    ],
+    "F887A85E3D1A1C08423A8CA333A6E439E4691033": [
+      {
+        "breach": "CareerPortalLeak2025",
+        "password_exposed": true
+      },
+      {
+        "breach": "CareerPortalLeak2025",
+        "password_exposed": true
+      }
+    ],
+    "34EEAB30015BB30CC25498526FC616EEB7405616": [
+      {
+        "breach": "MarketingList2023",
+        "password_exposed": false
+      },
+      {
+        "breach": "OldForum2019",
+        "password_exposed": false
+      },
+      {
+        "breach": "JobBoardDump2024",
+        "password_exposed": false
+      }
+    ],
+    "76F06260700BFC966852E2F05B08EB74C4B99D7B": [
+      {
+        "breach": "CloudBucket2022",
+        "password_exposed": true
+      },
+      {
+        "breach": "JobBoardDump2024",
+        "password_exposed": true
+      }
+    ],
+    "065B4D37468FD92932B3CCE20FF2BF1A33F31D46": [
+      {
+        "breach": "OldForum2019",
+        "password_exposed": false
+      },
+      {
+        "breach": "MarketingList2023",
+        "password_exposed": false
+      }
+    ],
+    "D8F27AEDBC2030971B0DFAA5C8767021DE788FE2": [
+      {
+        "breach": "OldForum2019",
+        "password_exposed": false
+      }
+    ],
+    "4D42F50E4040FD3D04EB0063774FAEDBA1AD3C9F": [
+      {
+        "breach": "CareerPortalLeak2025",
+        "password_exposed": true
+      },
+      {
+        "breach": "JobBoardDump2024",
+        "password_exposed": true
+      }
+    ],
+    "955790E6A38C0D42F8C53C1EF43FE740F4A8CB6E": [
+      {
+        "breach": "JobBoardDump2024",
+        "password_exposed": true
+      }
+    ],
+    "6B9F1FBF8A5FBA1E4FC90D4208298D28C912FD38": [
+      {
+        "breach": "JobBoardDump2024",
+        "password_exposed": true
+      },
+      {
+        "breach": "OldForum2019",
+        "password_exposed": false
+      }
+    ],
+    "A7F5945EA0D2897FAF6EFBB28F4512983F753563": [
+      {
+        "breach": "JobBoardDump2024",
+        "password_exposed": true
+      }
+    ],
+    "46D4A328B46B1BE2AA499AB6826AF3AAFAE64A3F": [
+      {
+        "breach": "JobBoardDump2024",
+        "password_exposed": false
+      }
+    ],
+    "B806AE301331F1791E87654DA790E84284A97BBB": [
+      {
+        "breach": "JobBoardDump2024",
+        "password_exposed": true
+      }
+    ],
+    "B0257982D2311C07B7C474F2B22B2A4DFF07DEBE": [
+      {
+        "breach": "MarketingList2023",
+        "password_exposed": false
+      }
+    ],
+    "3A8A7D15E6B9B21908E073D3F7717E7A5215C848": [
+      {
+        "breach": "CareerPortalLeak2025",
+        "password_exposed": false
+      },
+      {
+        "breach": "CloudBucket2022",
+        "password_exposed": false
+      }
+    ],
+    "2FCC74EB8857DE5A7098A6DB1286F1468AA6FE92": [
+      {
+        "breach": "JobBoardDump2024",
+        "password_exposed": true
+      },
+      {
+        "breach": "OldForum2019",
+        "password_exposed": false
+      }
+    ],
+    "791EF54D211EFB554B8C5B04192EFBFBA18B2D00": [
+      {
+        "breach": "JobBoardDump2024",
+        "password_exposed": true
+      }
+    ],
+    "F8F0E74BD5C2B2FF8E25F729669F7BE4A07789A5": [
+      {
+        "breach": "CareerPortalLeak2025",
+        "password_exposed": true
+      }
+    ],
+    "6E75C29C495C0B15C0492207020F97EC5BF7C7E1": [
+      {
+        "breach": "CareerPortalLeak2025",
+        "password_exposed": true
+      }
+    ],
+    "8EC60D05C3FFD61865B5FD747F61055475005D3E": [
+      {
+        "breach": "JobBoardDump2024",
+        "password_exposed": true
+      }
+    ],
+    "5BAB0C725D8EDC73643FACC267ECD2C732A5E3DD": [
+      {
+        "breach": "CloudBucket2022",
+        "password_exposed": false
+      }
+    ],
+    "4425D39BFDEAE910503AF82E78DEA7753369B709": [
+      {
+        "breach": "MarketingList2023",
+        "password_exposed": false
+      }
+    ],
+    "3919002B0D6E6C38E1BC8C289EFF0F49A6400184": [
+      {
+        "breach": "CareerPortalLeak2025",
+        "password_exposed": true
+      }
+    ],
+    "A65535598B82221B8C9352DF9B448537066F9E43": [
+      {
+        "breach": "CareerPortalLeak2025",
+        "password_exposed": true
+      },
+      {
+        "breach": "CloudBucket2022",
+        "password_exposed": false
+      }
+    ],
+    "E13D803D94CE82DA70F556C35CFA22262A778DA7": [
+      {
+        "breach": "CareerPortalLeak2025",
+        "password_exposed": true
+      },
+      {
+        "breach": "MarketingList2023",
+        "password_exposed": false
+      }
+    ],
+    "4197907B03CC1337650B483B87AFC5FA31FE8AC7": [
+      {
+        "breach": "JobBoardDump2024",
+        "password_exposed": false
+      }
+    ],
+    "2A2A3FF13C7DDC2B132B0B76102A130412A9D290": [
+      {
+        "breach": "JobBoardDump2024",
+        "password_exposed": true
+      }
+    ],
+    "F57670D2A6CCC2111C127A1E6B767AF8BC084447": [
+      {
+        "breach": "OldForum2019",
+        "password_exposed": false
+      }
+    ],
+    "3F7D20BD73B8B794E305857D5472559CD29A7198": [
+      {
+        "breach": "CareerPortalLeak2025",
+        "password_exposed": false
+      }
+    ],
+    "C4FC0B1F0A366748A04269ECAAAD3407D3DC3F4C": [
+      {
+        "breach": "JobBoardDump2024",
+        "password_exposed": true
+      }
+    ],
+    "BD6D8C0E727161C7A5E0FA2C6681D8F45292829B": [
+      {
+        "breach": "JobBoardDump2024",
+        "password_exposed": false
+      }
+    ],
+    "2830FAA11484F4ADF4BB01A11A82F02EC8AE570D": [
+      {
+        "breach": "JobBoardDump2024",
+        "password_exposed": false
+      }
+    ],
+    "72C94719437D0FD21B32A7844D48383CE36CBEFC": [
+      {
+        "breach": "CloudBucket2022",
+        "password_exposed": false
+      }
+    ],
+    "B7D653EEF023E4EBFCE0B749D4CB2B16848FC232": [
+      {
+        "breach": "OldForum2019",
+        "password_exposed": false
+      }
+    ],
+    "B987040B8A1DF68024109B4BA9F220383C5AD68A": [
+      {
+        "breach": "MarketingList2023",
+        "password_exposed": false
+      }
+    ],
+    "DF29ECDF54515095D2E56779E28BBDEB8673065C": [
+      {
+        "breach": "MarketingList2023",
+        "password_exposed": false
+      }
+    ]
+  }
+}
