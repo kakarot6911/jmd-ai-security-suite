@@ -17,7 +17,7 @@ with AI/ML, threat intelligence, SOC workflows, technical reports*).
 > detection), lives in a separate repo: [`jmd-phishguard`](https://github.com/gdfazal/jmd-phishguard).
 > The unified console & API integrate all five.
 
-![JMD Security Console — unified dashboard showing live output from all five tools](docs/console.png)
+![JMD Security Console — unified dashboard showing live output from all five tools](docs/website.png)
 
 ---
 
@@ -30,8 +30,6 @@ to the API — no page reloads) is served directly by the FastAPI backend:
 cd ~/jmd_security_suite
 ./run.sh web       # 🌐 interactive website + API → http://localhost:8000
 ```
-
-![JMD Security Console website — live KPIs, animated gauges and risk charts](docs/website.png)
 
 There is also a Streamlit version of the console:
 
