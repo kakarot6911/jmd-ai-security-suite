@@ -24,6 +24,7 @@ NAV = {
     "🛡️  PhishGuard": "phishguard",
     "🪪  ResumeShield": "resumeshield",
     "🔐  SiteGuard": "siteguard",
+    "🔗  LinkGuard": "linkguard",
     "📡  BreachRadar": "breachradar",
 }
 BAND_DOMAIN = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "NONE", "INFO"]
@@ -115,7 +116,8 @@ def page_home():
     pwd = sum(1 for x in org if x["password_exposed"])
 
     tiles = st.columns(4)
-    tiles[0].markdown(T.stat_tile("Modules online", f"{sum(t['available'] for t in ig.TOOLS)}/4",
+    tiles[0].markdown(T.stat_tile("Modules online",
+                                  f"{sum(t['available'] for t in ig.TOOLS)}/{len(ig.TOOLS)}",
                                   "all systems go", T.ACCENT), unsafe_allow_html=True)
     tiles[1].markdown(T.stat_tile("Accounts monitored", total, "staff + recruiter inboxes",
                                   T.PRIMARY), unsafe_allow_html=True)
@@ -148,7 +150,7 @@ def page_home():
                                     "Online" if t["available"] else "Offline"),
                         unsafe_allow_html=True)
             st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
-    T.footer("JMD Security Suite · PhishGuard · ResumeShield · SiteGuard · BreachRadar — "
+    T.footer("JMD Security Suite · PhishGuard · ResumeShield · SiteGuard · LinkGuard · BreachRadar — "
              "synthetic data · safe by default")
 
 
@@ -287,6 +289,44 @@ def page_siteguard():
             st.success("No issues found — solid posture.")
 
 
+def page_linkguard():
+    T.hero("LinkGuard", "Lexical safety analysis of job links — catches typosquats, shorteners, "
+           "homographs and credential traps that impersonate the firm.", eyebrow="URL Threat Analysis")
+    samples = {"— type my own —": "", **ig.LINKGUARD_DEMOS}
+    choice = st.selectbox("Try a sample link", list(samples))
+    url = st.text_input("URL", value=samples[choice],
+                        placeholder="https://jmdcareermaker.com/careers")
+    if st.button("▶️  Analyze link", use_container_width=True) and url:
+        v = ig.linkguard_analyze(url)
+        a, b = st.columns([1, 1.6])
+        with a:
+            st.markdown(T.donut(v["risk_score"], v["risk_band"], center=str(v["risk_score"]),
+                                label="risk score"), unsafe_allow_html=True)
+        with b:
+            st.markdown(T.big_badge(v["risk_band"], v["verdict"]), unsafe_allow_html=True)
+            dest_band = ("LOW" if v["matches_official"] else
+                         "CRITICAL" if v["brand_impersonation"] else "INFO")
+            dest_label = ("Official domain" if v["matches_official"] else
+                          "Impersonation" if v["brand_impersonation"] else "Unknown party")
+            st.markdown("<div style='margin-top:10px'>"
+                        f"{T.chip('Real destination: ' + (v['registrable_domain'] or '—'), dest_band)}"
+                        f"{T.chip(dest_label, dest_band)}"
+                        f"{T.chip('HTTPS' if v['is_https'] else 'No HTTPS', 'LOW' if v['is_https'] else 'MEDIUM')}"
+                        "</div>", unsafe_allow_html=True)
+        flagged = [s for s in v["signals"] if s["weight"]]
+        if flagged:
+            T.section(f"Signals ({len(flagged)})")
+            st.dataframe(pd.DataFrame([
+                {"severity": s["severity"], "signal": s["name"],
+                 "weight": s["weight"], "why": s["detail"]} for s in flagged]),
+                hide_index=True, use_container_width=True)
+        else:
+            st.success("No red-flag signals — link looks clean.")
+        T.section("Recommended action")
+        for adv in v["advice"]:
+            st.markdown(f"- {adv}")
+
+
 def page_breachradar():
     T.hero("BreachRadar", "Privacy-preserving credential-exposure monitoring for staff and "
            "recruiter accounts.", eyebrow="Threat Intelligence")
@@ -335,7 +375,7 @@ def page_breachradar():
 
 PAGES = {
     "home": page_home, "phishguard": page_phishguard, "resumeshield": page_resumeshield,
-    "siteguard": page_siteguard, "breachradar": page_breachradar,
+    "siteguard": page_siteguard, "linkguard": page_linkguard, "breachradar": page_breachradar,
 }
 
 

@@ -3,7 +3,7 @@
 **Author:** Fazal Ahmad — AI Cybersecurity Intern
 **Organisation:** JMD The Career Maker
 **Reporting to:** AI & Cybersecurity Team Lead
-**Version:** 1.0 · **Status:** All modules operational · 27/27 automated tests passing
+**Version:** 1.1 · **Status:** All modules operational · 38/38 automated tests passing
 
 ---
 
@@ -11,7 +11,7 @@
 
 JMD The Career Maker is a career-solutions firm whose core operations — recruiter
 email, offer letters, candidate documents, and online portals — are exactly the
-surfaces targeted by modern attackers. This suite delivers **four AI/cybersecurity
+surfaces targeted by modern attackers. This suite delivers **five AI/cybersecurity
 controls**, unified behind a single premium **Security Console** and a single REST
 **API**, that together address the firm's most material risks:
 
@@ -20,6 +20,7 @@ controls**, unified behind a single premium **Security Console** and a single RE
 | 🛡️ PhishGuard | Fake job offers / recruitment scams / phishing impersonating the firm | AI-driven threat detection |
 | 🪪 ResumeShield | Candidate PII exposure when sharing resumes (DPDP Act 2023) | Security automation w/ AI-ML |
 | 🔐 SiteGuard | Web mis-configuration & secret exposure on site/portal | Vulnerability assessment |
+| 🔗 LinkGuard | Malicious job links (typosquats, shorteners, `@`-traps, homographs) impersonating the firm | AI-driven threat detection |
 | 📡 BreachRadar | Staff/recruiter credentials exposed in breaches | Threat intelligence / SOC |
 
 Every module is **explainable**, **safe by default**, and **tested**.
@@ -31,13 +32,13 @@ Every module is **explainable**, **safe by default**, and **tested**.
 ```
                  ┌──────────────────────────────────────────┐
                  │      JMD Security Console (Streamlit)      │  premium UI
-                 │   Overview · Phish · Resume · Site · Breach│
+                 │ Overview·Phish·Resume·Site·Link·Breach     │
                  └───────────────────┬──────────────────────┘
                                      │  console.integrations  (one adapter)
-        ┌───────────────┬────────────┼──────────────┬────────────────┐
-        ▼               ▼            ▼               ▼                ▼
-   PhishGuard     ResumeShield    SiteGuard      BreachRadar     FastAPI (api.main)
-   (TF-IDF+LR)    (PII+DPDP)      (posture)      (k-anon)        same adapter → REST
+   ┌────────────┬────────────┬───────┼───────┬─────────────┬──────────────┐
+   ▼            ▼            ▼        ▼       ▼             ▼              ▼
+PhishGuard ResumeShield  SiteGuard LinkGuard BreachRadar          FastAPI (api.main)
+(TF-IDF+LR)(PII+DPDP)    (posture) (URL heur)(k-anon)             same adapter → REST
 ```
 
 - **`console/integrations.py`** is the single source of truth: both the UI and the
@@ -68,7 +69,17 @@ cookie flags, banner leakage, TLS version, and probes for exposed files
 tested offline). **Live scanning is gated behind an explicit authorization flag** and
 limited to safe GET requests — the API returns **403** for unauthorized live scans.
 
-### 3.4 BreachRadar
+### 3.4 LinkGuard
+Lexical URL analysis — **no network calls**, fully deterministic. It extracts the
+*registrable* domain and runs a dozen heuristics: edit-distance **typosquat** detection
+against the firm's domain, **brand-in-subdomain** burial, **`user@host` credential
+traps** (reporting the *real* post-`@` destination), **punycode/homograph** hosts, URL
+**shorteners**, suspicious TLDs, sub-domain stuffing, non-HTTPS, non-standard ports and
+sensitive-path keywords. Each signal carries a weight, severity and plain-English reason;
+the weighted sum yields a SAFE / SUSPICIOUS / DANGEROUS verdict. It pairs with PhishGuard
+— PhishGuard reads the e-mail *body*, LinkGuard scrutinises the *links* inside it.
+
+### 3.5 BreachRadar
 Credential-exposure monitoring using a **k-anonymity hash-prefix lookup** (the HIBP
 range-API model): only a 5-char SHA-1 prefix would ever leave the client; the full hash
 is matched locally. Risk scoring blends breach severity, recency, password exposure and
@@ -91,14 +102,15 @@ high-value-role targeting. The corpus is **synthetic and offline**.
 |---|---|---|
 | ResumeShield | 7 | ✅ |
 | SiteGuard | 7 | ✅ |
+| LinkGuard | 8 | ✅ |
 | BreachRadar | 6 | ✅ |
-| Integration / API | 7 | ✅ |
-| **Total** | **27** | **✅ all passing** |
+| Integration / API | 10 | ✅ |
+| **Total** | **38** | **✅ all passing** |
 
 Run with `./run.sh test`. The unified API was additionally verified end-to-end across
 all endpoints (`/health`, `/phishguard/analyze`, `/resumeshield/redact`,
-`/siteguard/scan`, `/breachradar/check`, `/breachradar/scan-org`), including the 403
-authorization guard.
+`/siteguard/scan`, `/linkguard/analyze`, `/breachradar/check`, `/breachradar/scan-org`),
+including the 403 authorization guard.
 
 ---
 
@@ -108,7 +120,8 @@ authorization guard.
   reputation, a real breach feed (e.g. an internal HIBP-style mirror), and
   Hindi/Hinglish coverage.
 - Add authentication + rate limiting to the API before any non-local deployment.
-- Containerise (Dockerfile) and add CI to run the 27 tests on every change.
+- **Done:** containerised (`Dockerfile`, non-root, healthcheck, one-command `./run.sh docker`).
+  Next: add CI to run the 38 tests on every change.
 
 ---
 

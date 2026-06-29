@@ -9,18 +9,20 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from console import integrations as ig  # noqa: E402
 from api.main import (  # noqa: E402
-    PhishIn, ResumeIn, SiteIn, EmailIn,
-    health, tools, phishguard, resumeshield, siteguard,
+    PhishIn, ResumeIn, SiteIn, LinkIn, EmailIn,
+    health, tools, phishguard, resumeshield, siteguard, linkguard,
     breachradar_check, breachradar_org,
 )
 from fastapi import HTTPException  # noqa: E402
+
+EXPECTED_TOOLS = {"phishguard", "resumeshield", "siteguard", "linkguard", "breachradar"}
 
 
 def test_health_and_tools():
     h = health()
     assert h["status"] == "ok"
-    assert set(h["modules"]) == {"phishguard", "resumeshield", "siteguard", "breachradar"}
-    assert len(tools()) == 4
+    assert set(h["modules"]) == EXPECTED_TOOLS
+    assert len(tools()) == len(EXPECTED_TOOLS)
 
 
 def test_phishguard_route_scam():
@@ -48,6 +50,19 @@ def test_siteguard_unauthorized_blocked():
         assert e.status_code == 403
         return
     raise AssertionError("unauthorized live scan must be blocked with 403")
+
+
+def test_linkguard_route_flags_typosquat():
+    out = linkguard(LinkIn(url="https://jmdcaremaker.com/login"))
+    assert out["brand_impersonation"] is True
+    assert out["verdict"] == "DANGEROUS"
+    assert any(s["name"] == "brand_typosquat" for s in out["signals"])
+
+
+def test_linkguard_route_passes_official():
+    out = linkguard(LinkIn(url="https://jmdcareermaker.com/careers"))
+    assert out["matches_official"] is True
+    assert out["verdict"] == "SAFE"
 
 
 def test_breachradar_routes():
