@@ -110,6 +110,11 @@ Credential-exposure monitor over a **local, synthetic** breach corpus (offline &
 
 ---
 
+## 🤖 Role of AI
+How AI/ML is used in the suite and how it strengthens the firm's security posture —
+honestly separating today's ML (PhishGuard), AI-shaped automation, and the roadmap —
+is written up in **[`reports/AI_IN_SECURITY.md`](reports/AI_IN_SECURITY.md)**.
+
 ## Design principles
 - **Explainable:** every verdict lists the concrete signals behind it.
 - **Safe by default:** no destructive actions; live scanning requires authorization;
