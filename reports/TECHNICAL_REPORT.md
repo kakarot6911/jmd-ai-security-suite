@@ -3,7 +3,7 @@
 **Author:** Fazal Ahmad — AI Cybersecurity Intern
 **Organisation:** JMD The Career Maker
 **Reporting to:** AI & Cybersecurity Team Lead
-**Version:** 1.1 · **Status:** All modules operational · 38/38 automated tests passing
+**Version:** 1.2 · **Status:** All modules operational · 43/43 automated tests passing
 
 ---
 
@@ -38,7 +38,7 @@ Every module is **explainable**, **safe by default**, and **tested**.
    ┌────────────┬────────────┬───────┼───────┬─────────────┬──────────────┐
    ▼            ▼            ▼        ▼       ▼             ▼              ▼
 PhishGuard ResumeShield  SiteGuard LinkGuard BreachRadar          FastAPI (api.main)
-(TF-IDF+LR)(PII+DPDP)    (posture) (URL heur)(k-anon)             same adapter → REST
+(TF-IDF+LR)(PII+DPDP)    (posture) (ML+heur) (k-anon)             same adapter → REST
 ```
 
 - **`console/integrations.py`** is the single source of truth: both the UI and the
@@ -70,14 +70,18 @@ tested offline). **Live scanning is gated behind an explicit authorization flag*
 limited to safe GET requests — the API returns **403** for unauthorized live scans.
 
 ### 3.4 LinkGuard
-Lexical URL analysis — **no network calls**, fully deterministic. It extracts the
-*registrable* domain and runs a dozen heuristics: edit-distance **typosquat** detection
-against the firm's domain, **brand-in-subdomain** burial, **`user@host` credential
-traps** (reporting the *real* post-`@` destination), **punycode/homograph** hosts, URL
-**shorteners**, suspicious TLDs, sub-domain stuffing, non-HTTPS, non-standard ports and
-sensitive-path keywords. Each signal carries a weight, severity and plain-English reason;
-the weighted sum yields a SAFE / SUSPICIOUS / DANGEROUS verdict. It pairs with PhishGuard
-— PhishGuard reads the e-mail *body*, LinkGuard scrutinises the *links* inside it.
+URL analysis — **no network calls** — fusing heuristics with a **trained ML model**. It
+extracts the *registrable* domain and runs a dozen heuristics: edit-distance
+**typosquat** detection against the firm's domain, **brand-in-subdomain** burial,
+**`user@host` credential traps** (reporting the *real* post-`@` destination),
+**punycode/homograph** hosts, URL **shorteners**, suspicious TLDs, sub-domain stuffing,
+non-HTTPS, non-standard ports and sensitive-path keywords. A **`char_wb` TF-IDF +
+lexical-feature `LogisticRegression`** classifier (`linkguard/model.py`, trained on
+seeded synthetic data) adds a learned malicious-probability signal — **skipped for the
+genuine domain** so real links are never penalised. Each signal carries a weight,
+severity and plain-English reason; the weighted sum yields a SAFE / SUSPICIOUS /
+DANGEROUS verdict. It pairs with PhishGuard — PhishGuard reads the e-mail *body*,
+LinkGuard scrutinises the *links* inside it.
 
 ### 3.5 BreachRadar
 Credential-exposure monitoring using a **k-anonymity hash-prefix lookup** (the HIBP
@@ -102,10 +106,11 @@ high-value-role targeting. The corpus is **synthetic and offline**.
 |---|---|---|
 | ResumeShield | 7 | ✅ |
 | SiteGuard | 7 | ✅ |
-| LinkGuard | 8 | ✅ |
+| LinkGuard (heuristics) | 8 | ✅ |
+| LinkGuard (ML model) | 5 | ✅ |
 | BreachRadar | 6 | ✅ |
 | Integration / API | 10 | ✅ |
-| **Total** | **38** | **✅ all passing** |
+| **Total** | **43** | **✅ all passing** |
 
 Run with `./run.sh test`. The unified API was additionally verified end-to-end across
 all endpoints (`/health`, `/phishguard/analyze`, `/resumeshield/redact`,
@@ -121,7 +126,7 @@ including the 403 authorization guard.
   Hindi/Hinglish coverage.
 - Add authentication + rate limiting to the API before any non-local deployment.
 - **Done:** containerised (`Dockerfile`, non-root, healthcheck, one-command `./run.sh docker`).
-  Next: add CI to run the 38 tests on every change.
+  Next: add CI to run the 43 tests on every change.
 
 ---
 

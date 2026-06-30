@@ -13,12 +13,28 @@ It complements PhishGuard (which scores the e-mail *body*) by scrutinising the
 """
 from __future__ import annotations
 
+import functools
 from dataclasses import dataclass, field
 from typing import List, Optional
 from urllib.parse import urlsplit
 
 # The firm's genuine domain(s). Anything that looks-but-isn't is impersonation.
 BRAND_DOMAINS = ("jmdcareermaker.com",)
+
+# When a trained ML model is present, a predicted-malicious probability at/above
+# this threshold contributes an extra weighted signal (skipped for the official
+# domain, so a genuine link is never penalised by the model).
+ML_THRESHOLD = 0.5
+
+
+@functools.lru_cache(maxsize=1)
+def _model():
+    """Load the trained URL classifier if it exists; otherwise run heuristics only."""
+    try:
+        from linkguard.model import load_model
+        return load_model()
+    except Exception:
+        return None
 
 # Registrable-domain extraction without a public-suffix dependency: handle the
 # common multi-label suffixes we actually care about, else fall back to last two.
@@ -81,6 +97,7 @@ class UrlVerdict:
     risk_score: int = 0
     risk_band: str = "NONE"
     verdict: str = "SAFE"
+    ml_probability: Optional[float] = None   # None when no trained model is loaded
     signals: List[Signal] = field(default_factory=list)
     advice: List[str] = field(default_factory=list)
 
@@ -92,7 +109,8 @@ class UrlVerdict:
             "brand_impersonation": self.brand_impersonation,
             "matches_official": self.matches_official,
             "risk_score": self.risk_score, "risk_band": self.risk_band,
-            "verdict": self.verdict, "advice": self.advice,
+            "verdict": self.verdict, "ml_probability": self.ml_probability,
+            "advice": self.advice,
             "signals": [s.to_dict() for s in self.signals],
         }
 
@@ -136,7 +154,8 @@ def _sld(domain: str) -> str:
 
 
 # --- main entry point -------------------------------------------------------
-def analyze_url(url: str, brand_domains: Optional[tuple] = None) -> UrlVerdict:
+def analyze_url(url: str, brand_domains: Optional[tuple] = None,
+                use_model: bool = True) -> UrlVerdict:
     brands = tuple(brand_domains or BRAND_DOMAINS)
     raw = (url or "").strip()
     v = UrlVerdict(url=raw)
@@ -252,12 +271,24 @@ def analyze_url(url: str, brand_domains: Optional[tuple] = None) -> UrlVerdict:
         sigs.append(Signal("secret_in_query", "MEDIUM", 12,
                            "A secret/token is exposed in the query string of the link."))
 
+    # Learned signal: a trained ML classifier scores the URL holistically. It is
+    # skipped for the genuine domain so a real link is never penalised, and only
+    # contributes when it is reasonably confident the link is malicious.
+    if use_model and not v.matches_official:
+        m = _model()
+        if m is not None:
+            prob = m.predict_proba(raw)
+            v.ml_probability = round(float(prob), 4)
+            if prob >= ML_THRESHOLD:
+                sigs.append(Signal(
+                    "ml_phishing_pattern", "HIGH" if prob >= 0.8 else "MEDIUM",
+                    int(round(prob * 30)),
+                    f"ML model rates this link {prob:.0%} likely malicious from learned URL patterns."))
+
     # Official domain with no other issues → reassure explicitly.
     if v.matches_official and not sigs:
         sigs.append(Signal("matches_official", "INFO", 0,
                            f"'{reg}' is the firm's genuine domain."))
-        if not v.is_https:
-            pass
 
     score = min(100, sum(s.weight for s in sigs))
     v.signals = sorted(sigs, key=lambda s: s.weight, reverse=True)

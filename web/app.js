@@ -237,12 +237,15 @@ $("#lgBtn").addEventListener("click", () => withLoading($("#lgBtn"), "Analyzing�
   const v = await api("/linkguard/analyze", { url });
   const destBand = v.matches_official ? "LOW" : v.brand_impersonation ? "CRITICAL" : "INFO";
   const destLabel = v.matches_official ? "Official domain" : v.brand_impersonation ? "Impersonation" : "Unknown party";
+  const mlChip = (v.ml_probability == null) ? "" :
+    chip("ML: " + Math.round(v.ml_probability*100) + "% malicious",
+         v.ml_probability >= 0.8 ? "CRITICAL" : v.ml_probability >= 0.5 ? "HIGH" : "LOW");
   const sigs = (v.signals || []).filter(s => s.weight);
   const rows = sigs.map(s => `<tr><td>${chip(s.severity, s.severity)}</td><td>${esc(s.name)}</td><td>${s.weight}</td><td>${esc(s.detail)}</td></tr>`).join("");
   $("#lgResult").innerHTML = `<div class="split">
       ${donut(v.risk_score, v.risk_band, v.risk_score, "risk score")}
       <div>${bigBadge(v.risk_band, v.verdict)}
-        <div style="margin-top:10px">${chip("Real destination: "+(v.registrable_domain||"—"), destBand)}${chip(destLabel, destBand)}${chip(v.is_https?"HTTPS":"No HTTPS", v.is_https?"LOW":"MEDIUM")}</div></div></div>
+        <div style="margin-top:10px">${chip("Real destination: "+(v.registrable_domain||"—"), destBand)}${chip(destLabel, destBand)}${chip(v.is_https?"HTTPS":"No HTTPS", v.is_https?"LOW":"MEDIUM")}${mlChip}</div></div></div>
     ${sigs.length ? `<div class="sec"><span class="bar"></span><h4>Signals (${sigs.length})</h4></div>
       <table><thead><tr><th>Severity</th><th>Signal</th><th>Weight</th><th>Why it matters</th></tr></thead><tbody>${rows}</tbody></table>`
       : `<div class="notice ok">No red-flag signals — link looks clean.</div>`}

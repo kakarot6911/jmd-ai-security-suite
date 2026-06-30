@@ -57,6 +57,7 @@ def test_linkguard_route_flags_typosquat():
     assert out["brand_impersonation"] is True
     assert out["verdict"] == "DANGEROUS"
     assert any(s["name"] == "brand_typosquat" for s in out["signals"])
+    assert "ml_probability" in out                      # ML field always exposed
 
 
 def test_linkguard_route_passes_official():

@@ -47,23 +47,36 @@ Regression** classifier trained to score whether a recruitment message is fraudu
 This is **AI-driven threat detection** in the appointment-letter sense: the model
 improves as it sees more examples, and the rule layer keeps it safe and auditable.
 
-### 2.2 AI-shaped automation across the other tools
-The remaining tools are **deterministic by design** (so they are reproducible and
-safe), but they automate analyst judgement that would otherwise be manual:
+### 2.2 LinkGuard — supervised ML on URLs (the second AI model)
+LinkGuard pairs hand-engineered security heuristics with a **trained
+`LogisticRegression` classifier** that learns malicious-vs-benign links from two views:
+- **Character n-grams** (`char_wb` TF-IDF) capture the raw *look* of a URL string;
+- **Lexical features** from the heuristic engine (typosquat edit-distance, brand
+  impersonation, IP host, shortener, suspicious TLD, sub-domain depth …) give the
+  model structured security knowledge.
+
+The model returns a calibrated **malicious probability** that is fused as an extra
+weighted signal — and is **skipped for the firm's genuine domain**, so a real link is
+never penalised. Training data is **synthetic, seeded and offline** (benign links from
+real-shaped domains; malicious links built with the actual phishing tricks LinkGuard
+targets). On a held-out split it scores **~0.997 accuracy / 1.00 ROC-AUC** — strong, but
+honestly that reflects *synthetic, separable* data; the transferable value is the
+pipeline (`./run.sh train`, metrics in `linkguard/models/metrics.json`).
+
+### 2.3 AI-shaped automation across the remaining tools
+These are **deterministic by design** (reproducible and safe), automating analyst
+judgement that would otherwise be manual:
 - **ResumeShield** — automated PII discovery with **validation logic** (Aadhaar
   Verhoeff checksum, card Luhn, context-gated bank accounts) to suppress false
   positives, plus an automated DPDP Act 2023 compliance verdict.
-- **LinkGuard** — algorithmic URL risk scoring: **edit-distance (Levenshtein)
-  typosquat detection**, homograph/punycode and `user@host` analysis — the same
-  feature engineering a learned URL classifier would consume.
 - **SiteGuard** — automated, non-intrusive posture assessment and grading.
 - **BreachRadar** — automated, **privacy-preserving** k-anonymity exposure lookup
   with multi-factor risk scoring (severity × recency × password × role).
 
-> **Honest framing for the report:** one tool (PhishGuard) is true supervised ML;
-> the others are explainable heuristic/statistical automation. That mix is a feature,
-> not a gap — security controls that *guarantee* behaviour should not be left to a
-> probabilistic model.
+> **Honest framing for the report:** two tools (PhishGuard, LinkGuard) are true
+> supervised ML; the others are explainable heuristic/statistical automation. That mix
+> is a feature, not a gap — security controls that *guarantee* behaviour should not be
+> left to a probabilistic model.
 
 ---
 
@@ -98,7 +111,7 @@ AI in security is only an asset if it is used responsibly:
   rule/ML split keep legitimate candidates from being wrongly flagged.
 - **Explainable, auditable outputs.** Signals, weights and rationale accompany every
   decision, supporting review and accountability.
-- **Reproducible & tested.** Seeded data, pinned dependencies and 38 automated tests
+- **Reproducible & tested.** Seeded data, pinned dependencies and 43 automated tests
   mean behaviour is consistent and verifiable.
 
 ---
@@ -109,7 +122,7 @@ AI in security is only an asset if it is used responsibly:
 |---|---|---|
 | PhishGuard | TF-IDF + LogReg + rules | Transformer embeddings; Hindi/Hinglish coverage; SPF/DKIM/DMARC features |
 | ResumeShield | Validated regex + checksums | Fine-tuned **NER** for messy/scanned resumes |
-| LinkGuard | Lexical heuristics | Supervised **URL classifier** + live reputation feed |
+| LinkGuard | **Char-ngram + lexical LogReg** (done) + heuristics | Train on a real reported-phish feed; live URL reputation |
 | SiteGuard | Rule-based posture | **Anomaly detection** on header/config baselines |
 | BreachRadar | Heuristic risk scoring | Learned risk model on a real breach feed |
 | Suite-wide | Per-tool alerts | **Correlation/triage agent** that links signals across tools into one incident |

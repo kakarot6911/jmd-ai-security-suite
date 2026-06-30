@@ -62,7 +62,7 @@ and set `PHISHGUARD_ROOT` — see the [Dockerfile](Dockerfile) header.
 ```bash
 ./run.sh setup     # install deps (already done)
 ./run.sh data      # build BreachRadar corpus (already done)
-./run.sh test      # run all 38 tests
+./run.sh test      # run all 43 tests
 ./run.sh demo      # CLI demo of the four suite tools
 
 # individual dashboards (also available standalone)
@@ -93,10 +93,15 @@ Passive, **non-intrusive** web security-posture scanner for domains you control.
 - `python -m siteguard.cli --demo vulnerable` · `... https://yourdomain.com --authorize`
 
 ## 🔗 LinkGuard — `linkguard/`
-Lexical safety analysis of a single URL — **purely offline, no network calls**.
+Safety analysis of a single URL — **purely offline, no network calls** — fusing
+heuristics with a **trained ML classifier**.
 - Flags **typosquats** (edit-distance lookalikes of `jmdcareermaker.com`), **brand-in-subdomain**
   burials, **`user@host` credential traps**, **punycode/homograph** hosts, URL **shorteners**,
   suspicious TLDs, label stuffing, non-HTTPS, and sensitive paths.
+- **Machine learning:** a `char_wb` TF-IDF + lexical-feature **LogisticRegression** model
+  (`linkguard/model.py`) scores each URL's malicious probability and fuses it with the
+  heuristics — **skipped for the genuine domain** so real links are never penalised.
+  Trained on seeded synthetic data: `./run.sh train` (metrics in `linkguard/models/metrics.json`).
 - Verdict (SAFE / SUSPICIOUS / DANGEROUS) + 0–100 risk score, every signal explained, plus advice.
 - Complements PhishGuard: PhishGuard scores the e-mail *body*, LinkGuard scrutinises the *links*.
 - `python -m linkguard.cli check "http://bit.ly/jmd-offer"` · `... demo` · `streamlit run linkguard/app.py`
@@ -119,7 +124,7 @@ is written up in **[`reports/AI_IN_SECURITY.md`](reports/AI_IN_SECURITY.md)**.
 - **Explainable:** every verdict lists the concrete signals behind it.
 - **Safe by default:** no destructive actions; live scanning requires authorization;
   breach data is synthetic; PII is redacted, never stored.
-- **Tested:** 38 standalone tests (`./run.sh test`), no network required.
+- **Tested:** 43 standalone tests (`./run.sh test`), no network required.
 - **Reproducible:** seeded datasets, pinned deps, Python 3.14.
 
 ## Honest scope note

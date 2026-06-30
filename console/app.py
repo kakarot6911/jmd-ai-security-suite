@@ -308,10 +308,15 @@ def page_linkguard():
                          "CRITICAL" if v["brand_impersonation"] else "INFO")
             dest_label = ("Official domain" if v["matches_official"] else
                           "Impersonation" if v["brand_impersonation"] else "Unknown party")
+            ml = v.get("ml_probability")
+            ml_chip = ("" if ml is None else
+                       T.chip(f"ML: {ml:.0%} malicious", "CRITICAL" if ml >= 0.8 else
+                              "HIGH" if ml >= 0.5 else "LOW"))
             st.markdown("<div style='margin-top:10px'>"
                         f"{T.chip('Real destination: ' + (v['registrable_domain'] or '—'), dest_band)}"
                         f"{T.chip(dest_label, dest_band)}"
                         f"{T.chip('HTTPS' if v['is_https'] else 'No HTTPS', 'LOW' if v['is_https'] else 'MEDIUM')}"
+                        f"{ml_chip}"
                         "</div>", unsafe_allow_html=True)
         flagged = [s for s in v["signals"] if s["weight"]]
         if flagged:

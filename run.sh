@@ -3,6 +3,7 @@
 #   ./run.sh setup          install deps into .venv
 #   ./run.sh test           run all test suites
 #   ./run.sh data           (re)generate datasets/corpora
+#   ./run.sh train          train the LinkGuard ML URL classifier (writes the model)
 #   ./run.sh web            launch the interactive WEBSITE + API (open http://localhost:8000)
 #   ./run.sh console        launch the unified PREMIUM console (Streamlit, all 4 tools)
 #   ./run.sh api            launch the unified REST API (FastAPI; also serves the website)
@@ -31,8 +32,12 @@ case "${1:-help}" in
     $PY resumeshield/tests/test_pii.py
     $PY siteguard/tests/test_scanner.py
     $PY linkguard/tests/test_engine.py
+    $PY linkguard/tests/test_model.py
     $PY breachradar/tests/test_engine.py
     $PY tests/test_integration.py
+    ;;
+  train)
+    $PY -c "from linkguard.model import train; m=train(); print('LinkGuard URL model:', {k:m[k] for k in ('accuracy','precision','recall','f1','roc_auc')})"
     ;;
   docker)
     docker build -t jmd-security-suite . && \
