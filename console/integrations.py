@@ -5,11 +5,13 @@ import surface. Handles the cross-project path to PhishGuard.
 from __future__ import annotations
 
 import functools
+import os
 import sys
 from pathlib import Path
 
 SUITE_ROOT = Path(__file__).resolve().parents[1]
-PHISHGUARD_ROOT = Path("/Users/fazalahmad/jmd_phishguard")
+# Cross-project; overridable for containers/CI where PhishGuard isn't mounted.
+PHISHGUARD_ROOT = Path(os.environ.get("PHISHGUARD_ROOT", "/Users/fazalahmad/jmd_phishguard"))
 
 for p in (str(SUITE_ROOT), str(PHISHGUARD_ROOT)):
     if p not in sys.path:
@@ -20,6 +22,8 @@ from resumeshield.redact import redact as _redact          # noqa: E402
 from siteguard.scanner import scan as _scan                # noqa: E402
 from siteguard.demo import DEMOS as SITEGUARD_DEMOS        # noqa: E402
 from breachradar.engine import BreachRadar                 # noqa: E402
+from linkguard.engine import analyze_url as _analyze_link  # noqa: E402
+from linkguard.demo import DEMOS as LINKGUARD_DEMOS        # noqa: E402
 
 PHISHGUARD_AVAILABLE = (PHISHGUARD_ROOT / "models" / "phishguard_model.joblib").exists()
 
@@ -59,6 +63,10 @@ def siteguard_scan(url: str, authorized: bool = False, demo: str | None = None) 
     return _scan(url, authorized=authorized).to_dict()
 
 
+def linkguard_analyze(url: str) -> dict:
+    return _analyze_link(url).to_dict()
+
+
 def breachradar_check(email: str) -> dict:
     return _radar().check(email).to_dict()
 
@@ -81,6 +89,9 @@ TOOLS = [
      "available": True},
     {"key": "siteguard", "icon": "🔐", "name": "SiteGuard",
      "desc": "Passive web security-posture scanner for the firm's site & candidate portal.",
+     "available": True},
+    {"key": "linkguard", "icon": "🔗", "name": "LinkGuard",
+     "desc": "Flags typosquats, shorteners & impersonation in job links sent to or from candidates.",
      "available": True},
     {"key": "breachradar", "icon": "📡", "name": "BreachRadar",
      "desc": "Monitors staff/recruiter accounts for exposure in known data breaches.",

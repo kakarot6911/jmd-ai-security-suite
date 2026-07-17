@@ -1,6 +1,6 @@
 # 🛡️ JMD Security Suite
 
-**Three AI/cybersecurity tools built for the AI Cybersecurity internship at
+**Four AI/cybersecurity tools built for the AI Cybersecurity internship at
 JMD The Career Maker** — each one targets a *real* operational risk for a
 career-consulting firm and maps directly to the appointment-letter duties
 (*AI-driven threat detection, vulnerability assessments, security automation
@@ -10,12 +10,14 @@ with AI/ML, threat intelligence, SOC workflows, technical reports*).
 |---|---|---|
 | 🪪 **ResumeShield** | Candidate resumes are full of PII (Aadhaar, PAN, bank a/c) that must be protected before sharing with employers — a **DPDP Act 2023** legal duty. | Security automation w/ AI-ML |
 | 🔐 **SiteGuard** | The firm's website & candidate portal may leak secrets or miss security headers. | Vulnerability assessment |
+| 🔗 **LinkGuard** | Job links e-mailed to/from candidates may be typosquats, shorteners or lookalikes impersonating the firm. | AI threat detection |
 | 📡 **BreachRadar** | Staff/recruiter accounts (HR, careers, finance) may already be exposed in data breaches. | Threat intelligence / SOC |
 
-> A complementary fourth tool, **PhishGuard** (recruitment-fraud & phishing
+> A complementary fifth tool, **PhishGuard** (recruitment-fraud & phishing
 > detection), lives in a separate repo: [`jmd-phishguard`](https://github.com/gdfazal/jmd-phishguard).
+> The unified console & API integrate all five.
 
-![JMD Security Console — unified dashboard showing live output from all four tools](docs/console.png)
+![JMD Security Console — unified dashboard showing live output from all five tools](docs/website.png)
 
 ---
 
@@ -29,8 +31,6 @@ cd ~/jmd_security_suite
 ./run.sh web       # 🌐 interactive website + API → http://localhost:8000
 ```
 
-![JMD Security Console website — live KPIs, animated gauges and risk charts](docs/website.png)
-
 There is also a Streamlit version of the console:
 
 ```bash
@@ -42,21 +42,37 @@ The console has an **Overview** page (live KPIs + tool cards + exposure snapshot
 dedicated page per tool. Both console and API call one shared adapter
 (`console/integrations.py`), so they can never drift apart.
 
+## 🐳 Run anywhere (Docker)
+
+The whole suite (website + REST API) ships as one container — nothing to install:
+
+```bash
+./run.sh docker          # build the image and serve on http://localhost:8000
+# or manually:
+docker build -t jmd-security-suite .
+docker run --rm -p 8000:8000 jmd-security-suite
+```
+
+The image runs as a non-root user and exposes a `/health` healthcheck. PhishGuard is a
+separate repo and isn't bundled (the suite degrades gracefully); to include it, mount it
+and set `PHISHGUARD_ROOT` — see the [Dockerfile](Dockerfile) header.
+
 ## Quickstart
 
 ```bash
 ./run.sh setup     # install deps (already done)
 ./run.sh data      # build BreachRadar corpus (already done)
-./run.sh test      # run all 27 tests
-./run.sh demo      # CLI demo of the three suite tools
+./run.sh test      # run all 43 tests
+./run.sh demo      # CLI demo of the four suite tools
 
 # individual dashboards (also available standalone)
-./run.sh resumeshield   # / siteguard / breachradar
+./run.sh resumeshield   # / siteguard / linkguard / breachradar
 ```
 
 ### REST API endpoints
 `GET /health` · `GET /tools` · `POST /phishguard/analyze` · `POST /resumeshield/redact`
-· `POST /siteguard/scan` · `POST /breachradar/check` · `GET /breachradar/scan-org`
+· `POST /siteguard/scan` · `POST /linkguard/analyze` · `POST /breachradar/check`
+· `GET /breachradar/scan-org`
 
 ---
 
@@ -76,6 +92,20 @@ Passive, **non-intrusive** web security-posture scanner for domains you control.
   needs no network.
 - `python -m siteguard.cli --demo vulnerable` · `... https://yourdomain.com --authorize`
 
+## 🔗 LinkGuard — `linkguard/`
+Safety analysis of a single URL — **purely offline, no network calls** — fusing
+heuristics with a **trained ML classifier**.
+- Flags **typosquats** (edit-distance lookalikes of `jmdcareermaker.com`), **brand-in-subdomain**
+  burials, **`user@host` credential traps**, **punycode/homograph** hosts, URL **shorteners**,
+  suspicious TLDs, label stuffing, non-HTTPS, and sensitive paths.
+- **Machine learning:** a `char_wb` TF-IDF + lexical-feature **LogisticRegression** model
+  (`linkguard/model.py`) scores each URL's malicious probability and fuses it with the
+  heuristics — **skipped for the genuine domain** so real links are never penalised.
+  Trained on seeded synthetic data: `./run.sh train` (metrics in `linkguard/models/metrics.json`).
+- Verdict (SAFE / SUSPICIOUS / DANGEROUS) + 0–100 risk score, every signal explained, plus advice.
+- Complements PhishGuard: PhishGuard scores the e-mail *body*, LinkGuard scrutinises the *links*.
+- `python -m linkguard.cli check "http://bit.ly/jmd-offer"` · `... demo` · `streamlit run linkguard/app.py`
+
 ## 📡 BreachRadar — `breachradar/`
 Credential-exposure monitor over a **local, synthetic** breach corpus (offline & safe).
 - **Privacy-preserving k-anonymity** hash-prefix lookup (HIBP range-API model).
@@ -85,11 +115,16 @@ Credential-exposure monitor over a **local, synthetic** breach corpus (offline &
 
 ---
 
+## 🤖 Role of AI
+How AI/ML is used in the suite and how it strengthens the firm's security posture —
+honestly separating today's ML (PhishGuard), AI-shaped automation, and the roadmap —
+is written up in **[`reports/AI_IN_SECURITY.md`](reports/AI_IN_SECURITY.md)**.
+
 ## Design principles
 - **Explainable:** every verdict lists the concrete signals behind it.
 - **Safe by default:** no destructive actions; live scanning requires authorization;
   breach data is synthetic; PII is redacted, never stored.
-- **Tested:** 20 standalone tests (`./run.sh test`), no network required.
+- **Tested:** 43 standalone tests (`./run.sh test`), no network required.
 - **Reproducible:** seeded datasets, pinned deps, Python 3.14.
 
 ## Honest scope note

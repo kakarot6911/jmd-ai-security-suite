@@ -3,13 +3,16 @@
 #   ./run.sh setup          install deps into .venv
 #   ./run.sh test           run all test suites
 #   ./run.sh data           (re)generate datasets/corpora
+#   ./run.sh train          train the LinkGuard ML URL classifier (writes the model)
 #   ./run.sh web            launch the interactive WEBSITE + API (open http://localhost:8000)
 #   ./run.sh console        launch the unified PREMIUM console (Streamlit, all 4 tools)
 #   ./run.sh api            launch the unified REST API (FastAPI; also serves the website)
 #   ./run.sh resumeshield   launch ResumeShield dashboard
 #   ./run.sh siteguard      launch SiteGuard dashboard
+#   ./run.sh linkguard      launch LinkGuard dashboard
 #   ./run.sh breachradar    launch BreachRadar dashboard
-#   ./run.sh demo           run a quick CLI demo of all three
+#   ./run.sh docker         build the image and run the website+API on :8000
+#   ./run.sh demo           run a quick CLI demo of all four tools
 set -euo pipefail
 cd "$(dirname "$0")"
 PY=./.venv/bin/python
@@ -28,17 +31,29 @@ case "${1:-help}" in
   test)
     $PY resumeshield/tests/test_pii.py
     $PY siteguard/tests/test_scanner.py
+    $PY linkguard/tests/test_engine.py
+    $PY linkguard/tests/test_model.py
     $PY breachradar/tests/test_engine.py
     $PY tests/test_integration.py
+    ;;
+  train)
+    $PY -c "from linkguard.model import train; m=train(); print('LinkGuard URL model:', {k:m[k] for k in ('accuracy','precision','recall','f1','roc_auc')})"
+    ;;
+  docker)
+    docker build -t jmd-security-suite . && \
+    echo "→ Website:  http://localhost:8000" && \
+    docker run --rm -p 8000:8000 jmd-security-suite
     ;;
   console)      $ST run console/app.py ;;
   web|api)      echo "→ Website:  http://localhost:8000" && echo "→ API docs: http://localhost:8000/docs" && $UV api.main:app --port 8000 ;;
   resumeshield) $ST run resumeshield/app.py ;;
   siteguard)    $ST run siteguard/app.py ;;
+  linkguard)    $ST run linkguard/app.py ;;
   breachradar)  $ST run breachradar/app.py ;;
   demo)
     echo "== ResumeShield =="; $PY -m resumeshield.redact
     echo; echo "== SiteGuard (vulnerable demo) =="; $PY -m siteguard.cli --demo vulnerable
+    echo; echo "== LinkGuard (sample links) =="; $PY -m linkguard.cli demo
     echo; echo "== BreachRadar (org scan) =="; $PY -m breachradar.cli scan-org
     ;;
   *)

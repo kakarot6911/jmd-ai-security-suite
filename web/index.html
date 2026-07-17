@@ -17,6 +17,7 @@
     <button data-view="phishguard">🛡️ PhishGuard</button>
     <button data-view="resumeshield">🪪 ResumeShield</button>
     <button data-view="siteguard">🔐 SiteGuard</button>
+    <button data-view="linkguard">🔗 LinkGuard</button>
     <button data-view="breachradar">📡 BreachRadar</button>
   </nav>
   <div class="status">
@@ -44,7 +45,7 @@
     </div>
     <div class="sec"><span class="bar"></span><h4>Security modules</h4></div>
     <div class="grid g2" id="toolCards"></div>
-    <div class="foot">JMD Security Suite · PhishGuard · ResumeShield · SiteGuard · BreachRadar —
+    <div class="foot">JMD Security Suite · PhishGuard · ResumeShield · SiteGuard · LinkGuard · BreachRadar —
       synthetic data · safe by default</div>
   </section>
 
@@ -92,6 +93,20 @@
     </div>
     <div style="margin-top:14px"><button class="btn" id="sgBtn">▶️ Run scan</button></div>
     <div id="sgResult" style="margin-top:18px"></div>
+  </section>
+
+  <!-- LINKGUARD -->
+  <section id="view-linkguard" class="view">
+    <div class="hero"><div class="eyebrow">URL Threat Analysis</div><h1>LinkGuard</h1>
+      <p>Lexical safety analysis of job links — catches typosquats, shorteners, homographs and
+         credential traps that impersonate the firm.</p></div>
+    <div class="samples" id="lgSamples"></div>
+    <div class="row">
+      <div style="flex:1"><label>Link to analyse</label>
+        <input type="text" id="lgUrl" placeholder="https://jmdcareermaker.com/careers"></div>
+    </div>
+    <div style="margin-top:14px"><button class="btn" id="lgBtn">🔗 Analyze link</button></div>
+    <div id="lgResult" style="margin-top:18px"></div>
   </section>
 
   <!-- BREACHRADAR -->

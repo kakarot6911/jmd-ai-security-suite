@@ -44,6 +44,10 @@ class SiteIn(BaseModel):
     demo: Optional[str] = Field(None, description="hardened | vulnerable (offline)")
 
 
+class LinkIn(BaseModel):
+    url: str = Field(..., description="The link to analyse (scheme optional).")
+
+
 class EmailIn(BaseModel):
     email: str
 
@@ -80,6 +84,11 @@ def siteguard(inp: SiteIn):
         return ig.siteguard_scan(inp.url, authorized=inp.authorized, demo=inp.demo)
     except PermissionError as e:
         raise HTTPException(403, str(e))
+
+
+@app.post("/linkguard/analyze")
+def linkguard(inp: LinkIn):
+    return ig.linkguard_analyze(inp.url)
 
 
 @app.post("/breachradar/check")

@@ -100,19 +100,20 @@ $("#nav").addEventListener("click", e => {
 
 /* ---- overview ---- */
 const TOOLS = [
-  ["🛡️","PhishGuard","Detects fake job offers, recruitment scams & phishing impersonating the firm."],
-  ["🪪","ResumeShield","Redacts candidate PII and reports DPDP Act 2023 compliance before sharing resumes."],
-  ["🔐","SiteGuard","Passive web security-posture scanner for the firm's site & candidate portal."],
-  ["📡","BreachRadar","Monitors staff/recruiter accounts for exposure in known data breaches."],
+  ["🛡️","PhishGuard","Detects fake job offers, recruitment scams & phishing impersonating the firm.","phishguard"],
+  ["🪪","ResumeShield","Redacts candidate PII and reports DPDP Act 2023 compliance before sharing resumes.","resumeshield"],
+  ["🔐","SiteGuard","Passive web security-posture scanner for the firm's site & candidate portal.","siteguard"],
+  ["🔗","LinkGuard","Flags typosquats, shorteners & impersonation in job links sent to or from candidates.","linkguard"],
+  ["📡","BreachRadar","Monitors staff/recruiter accounts for exposure in known data breaches.","breachradar"],
 ];
 async function loadHome() {
   try {
     const health = await api("/health");
     const mods = health.modules || {};
-    $("#statusLab").textContent = "Modules · " + Object.values(mods).filter(Boolean).length + "/4";
-    $("#statusList").innerHTML = TOOLS.map((t, i) => {
-      const key = ["phishguard","resumeshield","siteguard","breachradar"][i];
-      const on = mods[key] !== false;
+    const n = TOOLS.length;
+    $("#statusLab").textContent = "Modules · " + Object.values(mods).filter(Boolean).length + "/" + n;
+    $("#statusList").innerHTML = TOOLS.map(t => {
+      const on = mods[t[3]] !== false;
       return `<div class="row" style="display:flex"><span class="dot ${on?"on":"off"}"></span>${t[0]} ${t[1]}</div>`;
     }).join("");
 
@@ -125,7 +126,7 @@ async function loadHome() {
     const crit = org.filter(x => ["CRITICAL","HIGH"].includes(x.risk_band)).length;
     const pwd = org.filter(x => x.password_exposed).length;
     $("#kpis").innerHTML =
-      tile("Modules online","4/4","all systems go","#22d3ee") +
+      tile("Modules online", n + "/" + n, "all systems go","#22d3ee") +
       tile("Accounts monitored", total, "staff + recruiter inboxes","#6366f1") +
       tile("Exposed accounts", exposed, pwd + " with password leak", RISK.HIGH) +
       tile("High / critical", crit, "need action now", RISK.CRITICAL);
@@ -213,6 +214,44 @@ $("#sgBtn").addEventListener("click", () => withLoading($("#sgBtn"), "Scanning�
     ${ (res.findings||[]).length ? `<div class="sec"><span class="bar"></span><h4>Findings (${res.findings.length})</h4></div>${acc}`
        : `<div class="notice ok">No issues found — solid posture.</div>`}`;
   animateDonuts($("#sgResult"));
+}));
+
+/* ---- linkguard ---- */
+const LG_SAMPLES = {
+  "Official page": "https://jmdcareermaker.com/careers/ai-cybersecurity-intern",
+  "Shortened link": "http://bit.ly/jmd-offer",
+  "Typosquat": "https://jmdcaremaker.com/login",
+  "Brand in subdomain": "https://jmdcareermaker.com.secure-login.ru/verify",
+  "@-trap": "http://jmdcareermaker.com@192.168.0.5/pay?token=abc123",
+  "Punycode": "https://xn--jmdcareermker-9zb.com/account",
+};
+$("#lgSamples").innerHTML = Object.keys(LG_SAMPLES).map(k =>
+  `<button class="btn ghost" data-s="${esc(k)}">${esc(k)}</button>`).join("");
+$("#lgSamples").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  $("#lgUrl").value = LG_SAMPLES[b.dataset.s];
+});
+$("#lgBtn").addEventListener("click", () => withLoading($("#lgBtn"), "Analyzing…", async () => {
+  const url = $("#lgUrl").value.trim();
+  if (!url) { toast("Paste a link first."); return; }
+  const v = await api("/linkguard/analyze", { url });
+  const destBand = v.matches_official ? "LOW" : v.brand_impersonation ? "CRITICAL" : "INFO";
+  const destLabel = v.matches_official ? "Official domain" : v.brand_impersonation ? "Impersonation" : "Unknown party";
+  const mlChip = (v.ml_probability == null) ? "" :
+    chip("ML: " + Math.round(v.ml_probability*100) + "% malicious",
+         v.ml_probability >= 0.8 ? "CRITICAL" : v.ml_probability >= 0.5 ? "HIGH" : "LOW");
+  const sigs = (v.signals || []).filter(s => s.weight);
+  const rows = sigs.map(s => `<tr><td>${chip(s.severity, s.severity)}</td><td>${esc(s.name)}</td><td>${s.weight}</td><td>${esc(s.detail)}</td></tr>`).join("");
+  $("#lgResult").innerHTML = `<div class="split">
+      ${donut(v.risk_score, v.risk_band, v.risk_score, "risk score")}
+      <div>${bigBadge(v.risk_band, v.verdict)}
+        <div style="margin-top:10px">${chip("Real destination: "+(v.registrable_domain||"—"), destBand)}${chip(destLabel, destBand)}${chip(v.is_https?"HTTPS":"No HTTPS", v.is_https?"LOW":"MEDIUM")}${mlChip}</div></div></div>
+    ${sigs.length ? `<div class="sec"><span class="bar"></span><h4>Signals (${sigs.length})</h4></div>
+      <table><thead><tr><th>Severity</th><th>Signal</th><th>Weight</th><th>Why it matters</th></tr></thead><tbody>${rows}</tbody></table>`
+      : `<div class="notice ok">No red-flag signals — link looks clean.</div>`}
+    <div class="sec"><span class="bar"></span><h4>Recommended action</h4></div>
+    <ul class="muted">${(v.advice||[]).map(a=>`<li>${esc(a)}</li>`).join("")}</ul>`;
+  animateDonuts($("#lgResult"));
 }));
 
 /* ---- breachradar ---- */
