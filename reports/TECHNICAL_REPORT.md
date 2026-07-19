@@ -3,7 +3,7 @@
 **Author:** Fazal Ahmad — AI Cybersecurity Intern
 **Organisation:** JMD The Career Maker
 **Reporting to:** AI & Cybersecurity Team Lead
-**Version:** 1.2 · **Status:** All modules operational · 43/43 automated tests passing
+**Version:** 1.3 · **Status:** All modules operational · 54/54 automated tests passing · API hardened & deploy-ready
 
 ---
 
@@ -109,8 +109,9 @@ high-value-role targeting. The corpus is **synthetic and offline**.
 | LinkGuard (heuristics) | 8 | ✅ |
 | LinkGuard (ML model) | 5 | ✅ |
 | BreachRadar | 6 | ✅ |
+| API hardening (auth / rate limit / headers) | 11 | ✅ |
 | Integration / API | 10 | ✅ |
-| **Total** | **43** | **✅ all passing** |
+| **Total** | **54** | **✅ all passing** |
 
 Run with `./run.sh test`. The unified API was additionally verified end-to-end across
 all endpoints (`/health`, `/phishguard/analyze`, `/resumeshield/redact`,
@@ -121,12 +122,14 @@ including the 403 authorization guard.
 
 ## 6. Limitations & roadmap
 - Datasets/corpora are synthetic → metrics validate the pipeline, not field difficulty.
+- **Done:** API hardening — env-gated key auth (`X-API-Key`, constant-time), in-memory
+  rate limiting (`429`/`Retry-After`), security headers (CSP, `X-Frame-Options`, `nosniff`),
+  request-body size cap and per-field length limits, configurable CORS. 11 dedicated tests.
+- **Done:** containerised (`Dockerfile`, non-root, healthcheck, honours `$PORT`) + one-click
+  deploy (`render.yaml` blueprint, `Procfile`, `DEPLOY.md`) to Render / Streamlit Cloud.
 - Next: connect a real reported-scam feed, real email headers (SPF/DKIM/DMARC), URL
-  reputation, a real breach feed (e.g. an internal HIBP-style mirror), and
-  Hindi/Hinglish coverage.
-- Add authentication + rate limiting to the API before any non-local deployment.
-- **Done:** containerised (`Dockerfile`, non-root, healthcheck, one-command `./run.sh docker`).
-  Next: add CI to run the 43 tests on every change.
+  reputation, a real breach feed (e.g. an internal HIBP-style mirror), Hindi/Hinglish
+  coverage, and CI to run the 54 tests on every change.
 
 ---
 

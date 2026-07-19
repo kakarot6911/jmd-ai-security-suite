@@ -1,5 +1,11 @@
 # 🛡️ JMD Security Suite
 
+![tests](https://img.shields.io/badge/tests-54%20passing-brightgreen)
+![python](https://img.shields.io/badge/python-3.14-blue)
+![license](https://img.shields.io/badge/license-MIT-green)
+![docker](https://img.shields.io/badge/docker-ready-2496ED)
+![API](https://img.shields.io/badge/API-key%20auth%20%2B%20rate%20limited-orange)
+
 **Four AI/cybersecurity tools built for the AI Cybersecurity internship at
 JMD The Career Maker** — each one targets a *real* operational risk for a
 career-consulting firm and maps directly to the appointment-letter duties
@@ -57,12 +63,35 @@ The image runs as a non-root user and exposes a `/health` healthcheck. PhishGuar
 separate repo and isn't bundled (the suite degrades gracefully); to include it, mount it
 and set `PHISHGUARD_ROOT` — see the [Dockerfile](Dockerfile) header.
 
+## ☁️ Deploy live
+
+[![Deploy to Render](https://img.shields.io/badge/Deploy%20to-Render-46E3B7?logo=render&logoColor=white)](https://render.com/deploy?repo=https://github.com/kakarot6911/jmd-ai-security-suite)
+
+The website + API deploy to **Render** as a Docker Blueprint (`render.yaml`), and the
+Streamlit console to **Streamlit Community Cloud** — both free. Full click-by-click
+steps, including the auto-generated API key, are in **[`DEPLOY.md`](DEPLOY.md)**. The
+container honours the host-injected `$PORT`, so Railway / Fly.io / Koyeb work too.
+
+## 🔒 API hardening
+
+The unified API is production-shaped, all configured by environment variables
+(defaults keep local dev frictionless — see [`DEPLOY.md`](DEPLOY.md)):
+
+- **API-key auth** on every analysis endpoint — set `JMD_API_KEY` and callers must send
+  `X-API-Key` (constant-time compared). Unset ⇒ open, for local use. Metadata routes stay open.
+- **Rate limiting** — in-memory sliding window, per API key (else per IP): `429` + `Retry-After`.
+- **Security headers** on every response — CSP, `X-Frame-Options: DENY`, `nosniff`, referrer & permissions policy.
+- **Input caps** — request-body size limit (`413`) and per-field length limits (`422`).
+- **CORS** — configurable allowed origins.
+
+Verified by 11 dedicated tests in `api/tests/test_security.py`.
+
 ## Quickstart
 
 ```bash
 ./run.sh setup     # install deps (already done)
 ./run.sh data      # build BreachRadar corpus (already done)
-./run.sh test      # run all 43 tests
+./run.sh test      # run all 54 tests
 ./run.sh demo      # CLI demo of the four suite tools
 
 # individual dashboards (also available standalone)
@@ -70,9 +99,10 @@ and set `PHISHGUARD_ROOT` — see the [Dockerfile](Dockerfile) header.
 ```
 
 ### REST API endpoints
-`GET /health` · `GET /tools` · `POST /phishguard/analyze` · `POST /resumeshield/redact`
+`GET /health` · `GET /version` · `GET /tools` · `POST /phishguard/analyze` · `POST /resumeshield/redact`
 · `POST /siteguard/scan` · `POST /linkguard/analyze` · `POST /breachradar/check`
-· `GET /breachradar/scan-org`
+· `GET /breachradar/scan-org` — interactive Swagger docs at `/docs`.
+The `POST` analysis routes require an `X-API-Key` header when `JMD_API_KEY` is set (see [API hardening](#-api-hardening)).
 
 ---
 
@@ -124,7 +154,8 @@ is written up in **[`reports/AI_IN_SECURITY.md`](reports/AI_IN_SECURITY.md)**.
 - **Explainable:** every verdict lists the concrete signals behind it.
 - **Safe by default:** no destructive actions; live scanning requires authorization;
   breach data is synthetic; PII is redacted, never stored.
-- **Tested:** 43 standalone tests (`./run.sh test`), no network required.
+- **Tested:** 54 standalone tests (`./run.sh test`), no network required.
+- **Hardened:** the API ships with key auth, rate limiting, security headers and input caps.
 - **Reproducible:** seeded datasets, pinned deps, Python 3.14.
 
 ## Honest scope note

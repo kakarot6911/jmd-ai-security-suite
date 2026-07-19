@@ -7,8 +7,15 @@ const rc = b => RISK[(b||"").toUpperCase()] || "#7c8aa8";
 const $ = sel => document.querySelector(sel);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
+// Optional API key: read from a <meta name="jmd-api-key"> tag so an auth-enabled
+// deployment can serve the site with a working demo key injected at deploy time.
+// The public demo ships with no key (auth off), so this is simply absent.
+const API_KEY = (document.querySelector('meta[name="jmd-api-key"]') || {}).content || "";
+
 async function api(path, body, method) {
-  const opt = { method: method || (body ? "POST" : "GET"), headers: {"Content-Type":"application/json"} };
+  const headers = {"Content-Type":"application/json"};
+  if (API_KEY) headers["X-API-Key"] = API_KEY;
+  const opt = { method: method || (body ? "POST" : "GET"), headers };
   if (body) opt.body = JSON.stringify(body);
   const r = await fetch(path, opt);
   if (!r.ok) {

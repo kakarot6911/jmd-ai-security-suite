@@ -1,0 +1,30 @@
+# Render.com blueprint — one-click deploy of the website + REST API.
+# Render builds the Dockerfile and injects $PORT (the container already honours it).
+#
+#   1. Push this repo to GitHub (already done).
+#   2. On https://dashboard.render.com  →  New  →  Blueprint  →  pick this repo.
+#   3. Render reads this file, builds the image and gives you a public https URL.
+#
+# The public demo ships with auth OFF so the built-in website works for anyone
+# who opens the link. Rate limiting, security headers and body caps are still on.
+# To lock the API down, uncomment the JMD_API_KEY block below (Render will mint a
+# strong random key) — the analysis endpoints then require an X-API-Key header.
+services:
+  - type: web
+    name: jmd-security-suite
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # - key: JMD_API_KEY        # uncomment to require X-API-Key on analysis routes
+      #   generateValue: true     # Render mints a strong random key
+      - key: JMD_RATE_LIMIT
+        value: "60"
+      - key: JMD_RATE_WINDOW
+        value: "60"
+      - key: JMD_CORS_ORIGINS
+        value: "*"
+      - key: JMD_MAX_BODY_BYTES
+        value: "65536"
