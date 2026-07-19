@@ -8,54 +8,116 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from console import integrations as ig  # noqa: E402
+from api import security as sec  # noqa: E402
+
+VERSION = "1.1.0"
 
 app = FastAPI(
     title="JMD Security Suite API",
-    version="1.0.0",
-    description="Unified endpoint for PhishGuard, ResumeShield, SiteGuard and BreachRadar.",
+    version=VERSION,
+    description="Unified endpoint for PhishGuard, ResumeShield, SiteGuard, LinkGuard and BreachRadar.",
 )
 WEB_DIR = ROOT / "web"
+
+# Analysis endpoints that require an API key (when JMD_API_KEY is set) and are
+# rate-limited. GET metadata routes (/health, /version, /tools) and the static
+# site stay open.
+PROTECTED_PREFIXES = (
+    "/phishguard", "/resumeshield", "/siteguard", "/linkguard", "/breachradar",
+)
+_limiter = sec.rate_limiter_from_env()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=sec.cors_origins(),
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "X-API-Key"],
+)
+
+
+@app.middleware("http")
+async def harden(request: Request, call_next):
+    """Body-size cap → API-key auth → rate limit → security headers."""
+    path = request.url.path
+
+    content_length = request.headers.get("content-length")
+    if content_length and content_length.isdigit() and int(content_length) > sec.max_body_bytes():
+        return JSONResponse({"detail": "request body too large"}, status_code=413)
+
+    if path.startswith(PROTECTED_PREFIXES):
+        api_key = request.headers.get("x-api-key")
+        if sec.auth_enabled() and not sec.key_is_valid(api_key, sec.configured_api_keys()):
+            return JSONResponse(
+                {"detail": "invalid or missing API key"},
+                status_code=401,
+                headers={"WWW-Authenticate": "API-Key"},
+            )
+        client_ip = request.client.host if request.client else None
+        ok, retry_after = _limiter.allow(sec.client_id_for(client_ip, api_key))
+        if not ok:
+            return JSONResponse(
+                {"detail": "rate limit exceeded"},
+                status_code=429,
+                headers={"Retry-After": str(int(retry_after) + 1)},
+            )
+
+    response = await call_next(request)
+    for name, value in sec.SECURITY_HEADERS.items():
+        response.headers.setdefault(name, value)
+    return response
 
 
 # ---- Schemas --------------------------------------------------------------
 class PhishIn(BaseModel):
-    text: str = Field(..., description="Recruitment email / job-offer body.")
-    sender_email: str = ""
-    claimed_company: str = ""
+    text: str = Field(..., min_length=1, max_length=20_000, description="Recruitment email / job-offer body.")
+    sender_email: str = Field("", max_length=320)
+    claimed_company: str = Field("", max_length=200)
 
 
 class ResumeIn(BaseModel):
-    text: str
+    text: str = Field(..., min_length=1, max_length=100_000)
     keep_last: int = Field(0, ge=0, le=4)
 
 
 class SiteIn(BaseModel):
-    url: str = ""
+    url: str = Field("", max_length=2_048)
     authorized: bool = False
     demo: Optional[str] = Field(None, description="hardened | vulnerable (offline)")
 
 
 class LinkIn(BaseModel):
-    url: str = Field(..., description="The link to analyse (scheme optional).")
+    url: str = Field(..., min_length=1, max_length=2_048, description="The link to analyse (scheme optional).")
 
 
 class EmailIn(BaseModel):
-    email: str
+    email: str = Field(..., min_length=3, max_length=320)
 
 
 # ---- Routes ---------------------------------------------------------------
 @app.get("/health")
 def health():
     return {"status": "ok", "modules": {t["key"]: t["available"] for t in ig.TOOLS}}
+
+
+@app.get("/version")
+def version():
+    return {
+        "name": "JMD Security Suite API",
+        "version": VERSION,
+        "auth_required": sec.auth_enabled(),
+        "tools": [t["key"] for t in ig.TOOLS],
+    }
 
 
 @app.get("/tools")

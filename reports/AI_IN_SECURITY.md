@@ -111,7 +111,7 @@ AI in security is only an asset if it is used responsibly:
   rule/ML split keep legitimate candidates from being wrongly flagged.
 - **Explainable, auditable outputs.** Signals, weights and rationale accompany every
   decision, supporting review and accountability.
-- **Reproducible & tested.** Seeded data, pinned dependencies and 43 automated tests
+- **Reproducible & tested.** Seeded data, pinned dependencies and 54 automated tests
   mean behaviour is consistent and verifiable.
 
 ---
