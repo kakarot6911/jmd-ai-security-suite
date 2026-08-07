@@ -45,11 +45,21 @@ def test_punycode_homograph_flagged():
     assert any(s.name == "punycode_homograph" for s in v.signals)
 
 
-def test_scheme_optional_and_no_https_flagged():
+def test_scheme_optional_but_absence_is_not_evidence_of_insecurity():
+    """A pasted link with no scheme still parses, and must NOT be called insecure.
+
+    People routinely paste "example.com/page" without typing https://. Treating
+    that as a missing-TLS finding was a false positive: it says nothing about the
+    site. Only an explicit http:// is evidence, so no_https is asserted on the
+    explicit form and denied on the bare one.
+    """
     v = analyze_url("jmdcareermaker-hr.xyz/offer-letter")    # no scheme supplied
     assert v.host == "jmdcareermaker-hr.xyz"
-    assert any(s.name == "no_https" for s in v.signals)
+    assert not any(s.name == "no_https" for s in v.signals)
     assert any(s.name == "suspicious_tld" for s in v.signals)
+
+    explicit = analyze_url("http://jmdcareermaker-hr.xyz/offer-letter")
+    assert any(s.name == "no_https" for s in explicit.signals)
 
 
 def test_helpers_are_deterministic():

@@ -5,6 +5,9 @@
 #   ./run.sh data           (re)generate datasets/corpora
 #   ./run.sh train          train the LinkGuard ML URL classifier (writes the model)
 #   ./run.sh web            launch the interactive WEBSITE + API (open http://localhost:8000)
+#   ./run.sh eval           measure ACCURACY of all 5 tools against labelled cases
+#   ./run.sh holdout        held-out generalisation check (never tuned against)
+#   ./run.sh fuzz           robustness: hostile input must never crash a tool
 #   ./run.sh console        launch the unified PREMIUM console (Streamlit, all 4 tools)
 #   ./run.sh api            launch the unified REST API (FastAPI; also serves the website)
 #   ./run.sh resumeshield   launch ResumeShield dashboard
@@ -46,6 +49,9 @@ case "${1:-help}" in
     echo "→ Website:  http://localhost:8000" && \
     docker run --rm -p 8000:8000 jmd-security-suite
     ;;
+  eval)         $PY eval/run_eval.py "$@" ;;
+  holdout)      $PY eval/holdout.py ;;
+  fuzz)         $PY eval/robustness.py ;;
   console)      $ST run console/app.py ;;
   web|api)      echo "→ Website:  http://localhost:8000" && echo "→ API docs: http://localhost:8000/docs" && $UV api.main:app --port 8000 ;;
   resumeshield) $ST run resumeshield/app.py ;;

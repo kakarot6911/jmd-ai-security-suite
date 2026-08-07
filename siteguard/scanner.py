@@ -8,6 +8,7 @@ is fully unit-testable offline; live fetching is injected.
 """
 from __future__ import annotations
 
+import re
 import socket
 import ssl
 from dataclasses import asdict, dataclass, field
@@ -41,6 +42,60 @@ SENSITIVE_PATHS = {
     "/phpinfo.php": ("HIGH", "Exposed phpinfo() leaks server internals"),
     "/server-status": ("MEDIUM", "Exposed Apache server-status page"),
 }
+
+
+# A banner only leaks something actionable when it carries a version number.
+VERSION_RE = re.compile(r"\d+\.\d+|\d{2,}")
+
+# CSP directives that make the policy largely decorative.
+CSP_WEAKENERS = ("'unsafe-inline'", "'unsafe-eval'", "data:", "*")
+
+# HSTS below ~6 months gives little protection and is usually a leftover test value.
+HSTS_MIN_AGE = 15_552_000          # 180 days, the value browsers' preload lists expect
+
+VALID_XFO = {"deny", "sameorigin"}
+
+
+def _analyze_header_values(h: Dict[str, str]) -> List[Finding]:
+    """Grade the *content* of security headers that are present but may be ineffective."""
+    out: List[Finding] = []
+
+    csp = h.get("content-security-policy", "").strip()
+    if csp:
+        low = csp.lower()
+        weak = [w for w in CSP_WEAKENERS
+                if (w == "*" and re.search(r"(?:^|[\s;])(?:default|script|object)-src[^;]*\*", low))
+                or (w != "*" and w in low)]
+        if weak:
+            out.append(Finding(
+                id="csp-weak", title="Content-Security-Policy is present but permissive",
+                severity="HIGH", category="Mitigate XSS / injection",
+                evidence=f"contains {', '.join(weak)} — {csp[:100]}",
+                remediation="Remove wildcards and 'unsafe-inline'/'unsafe-eval'; "
+                            "name explicit sources or use nonces/hashes."))
+
+    hsts = h.get("strict-transport-security", "").strip()
+    if hsts:
+        m = re.search(r"max-age\s*=\s*(\d+)", hsts, re.I)
+        age = int(m.group(1)) if m else 0
+        if age < HSTS_MIN_AGE:
+            out.append(Finding(
+                id="hsts-weak",
+                title=("HSTS is disabled (max-age=0)" if age == 0
+                       else f"HSTS max-age is too short ({age}s)"),
+                severity="HIGH", category="Enforce HTTPS",
+                evidence=f"strict-transport-security: {hsts[:80]}",
+                remediation="Set 'max-age=31536000; includeSubDomains' (one year)."))
+
+    xfo = h.get("x-frame-options", "").strip().lower()
+    if xfo and xfo not in VALID_XFO and not xfo.startswith("allow-from"):
+        out.append(Finding(
+            id="xfo-invalid", title=f"X-Frame-Options has an ineffective value: '{xfo}'",
+            severity="MEDIUM", category="Prevent clickjacking",
+            evidence=f"x-frame-options: {xfo}",
+            remediation="Use 'DENY' or 'SAMEORIGIN'; other values are ignored by browsers."))
+
+    return out
 
 
 @dataclass
@@ -86,14 +141,23 @@ def analyze_headers(headers: Dict[str, str], scheme: str = "https") -> List[Find
                 id=f"hdr-missing-{name}", title=f"Missing header: {name}",
                 severity=sev, category=cat, evidence="header not present", remediation=fix))
 
-    # Banner leakage
+    # A header that is present but neutered is worse than a missing one, because it
+    # looks like protection in a checklist scan. Grade the VALUES, not just presence.
+    findings += _analyze_header_values(h)
+
+    # Banner leakage — only a real disclosure when a VERSION is revealed.
+    # "Server: nginx" tells an attacker nothing they can act on; "nginx/1.18.0" does.
     for banner in ("server", "x-powered-by", "x-aspnet-version"):
-        if banner in h and h[banner].strip():
-            findings.append(Finding(
-                id=f"banner-{banner}", title=f"Version banner exposed via '{banner}'",
-                severity="LOW", category="Information disclosure",
-                evidence=f"{banner}: {h[banner]}",
-                remediation=f"Suppress or genericise the '{banner}' response header."))
+        value = h.get(banner, "").strip()
+        if not value:
+            continue
+        if not VERSION_RE.search(value):
+            continue
+        findings.append(Finding(
+            id=f"banner-{banner}", title=f"Version banner exposed via '{banner}'",
+            severity="MEDIUM", category="Information disclosure",
+            evidence=f"{banner}: {value}",
+            remediation=f"Suppress or genericise the '{banner}' response header."))
 
     # Cookie flags
     cookie = h.get("set-cookie", "")
@@ -169,7 +233,7 @@ def scan(url: str, authorized: bool, fetcher: Optional[Callable] = None) -> Scan
     if scheme == "https" and live:
         info.update(_tls_info(host))
         tls = info.get("tls_version", "")
-        if tls and tls.replace(".", "").endswith(("10", "11")) or tls in {"TLSv1", "TLSv1.1"}:
+        if tls in {"TLSv1", "TLSv1.1", "TLSv1.0", "SSLv2", "SSLv3"}:
             findings.append(Finding("tls-old", f"Weak TLS version: {tls}", "HIGH",
                                     "Transport security", tls, "Disable TLS < 1.2."))
 

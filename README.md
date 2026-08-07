@@ -175,10 +175,54 @@ How AI/ML is used in the suite and how it strengthens the firm's security postur
 honestly separating today's ML (PhishGuard), AI-shaped automation, and the roadmap —
 is written up in **[`reports/AI_IN_SECURITY.md`](reports/AI_IN_SECURITY.md)**.
 
+## 📊 Measured accuracy
+
+Accuracy is measured, not asserted. `eval/cases.py` holds 106 hand-labelled cases —
+real Indian recruitment-scam patterns, real resume layouts, real header configurations —
+including deliberate false-positive traps (a salary of `500000` is not a PIN code;
+`we pay 12 LPA` is not a demand for money; `/accounting` is not `/account`).
+
+```bash
+./run.sh eval        # accuracy vs labelled cases, lists every individual miss
+./run.sh holdout     # held-out cases, never tuned against
+./run.sh fuzz        # hostile input must never crash a tool
+```
+
+| Tool | Before | After | What was wrong |
+|---|---:|---:|---|
+| PhishGuard | 76.9% | **100%** | `immediately` alone triggered urgency; a gmail recruiter with no company claim scored as fraud; the ML model could assert fraud with **zero** red flags |
+| ResumeShield | 47.8% | **100%** | any 6-digit number read as a PIN code (salaries, scores, headcounts); any `A1234567` read as a passport; no IFSC/UAN/voter-ID/UPI/DL detectors |
+| SiteGuard | 44.4% | **100%** | a *present* header counted as a *good* header — `max-age=0`, `default-src *` and `X-Frame-Options: ALLOWALL` all scored as fully protected |
+| LinkGuard | 93.5% | **100%** | `javascript:`/`data:` URLs **crashed** the analyzer; scheme-less pastes were called insecure; unicode homoglyphs missed |
+| BreachRadar | 72.7% | **100%** | the same breach counted twice, saturating three accounts at exactly 100/100 so the org scan could not rank them |
+| **Overall** | **71.3%** | **100%** | 18 false positives and 7 false negatives eliminated |
+
+Held-out generalisation: **29/29** on cases written after the fixes and run once.
+
+**Read that 100% correctly.** It means the suite now handles every labelled case, not
+that it is perfect on the open world — 106 cases is a small set, and cases.py was written
+by the same hand that fixed the code. The honest claims are the *before/after deltas* and
+the specific defect classes closed. Two changes matter beyond the score:
+
+- **PhishGuard can no longer assert fraud without evidence.** The synthetic-trained model
+  was over-confident (0.81 on a routine interview-scheduling email). The verdict is now a
+  calibration of model score and fired rules, capped below the fraud threshold when no
+  deterministic rule fires — a verdict with an empty red-flag list cannot be justified to
+  a candidate, so it is no longer issued.
+- **SiteGuard grades header *values*, not their presence.** A neutered header is worse
+  than a missing one because it passes a checklist scan.
+
+### Robustness
+`./run.sh fuzz` drives every tool with empty values, wrong types, 100k-character strings,
+null bytes, unicode, path traversal, template-injection and malformed URLs — **202 hostile
+inputs, zero unhandled exceptions**. Every API route was fuzzed live too: every hostile
+request returned a valid HTTP status (200/400/422), never a 500.
+
 ## Design principles
 - **Explainable:** every verdict lists the concrete signals behind it.
 - **Safe by default:** no destructive actions; live scanning requires authorization;
   breach data is synthetic; PII is redacted, never stored.
+- **Measured:** accuracy is evaluated against labelled cases, not claimed (`./run.sh eval`).
 - **Tested:** 70 standalone tests (`./run.sh test`), no network required — the live-data
   layer is tested through an injected fetcher.
 - **Hardened:** the API ships with key auth, rate limiting, security headers and input caps.

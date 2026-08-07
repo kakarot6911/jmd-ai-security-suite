@@ -14,6 +14,7 @@ It complements PhishGuard (which scores the e-mail *body*) by scrutinising the
 from __future__ import annotations
 
 import functools
+import re
 from dataclasses import dataclass, field
 from typing import List, Optional
 from urllib.parse import urlsplit
@@ -59,6 +60,16 @@ SENSITIVE_PATH_WORDS = {
     "login", "signin", "verify", "secure", "account", "password", "passwd",
     "payment", "pay", "offer", "offer-letter", "kyc", "update", "confirm", "wallet",
 }
+
+# Schemes that execute content rather than navigate to a page. Never legitimate
+# in a job link, and urlsplit() cannot meaningfully parse them.
+DANGEROUS_SCHEMES = {"javascript", "data", "vbscript", "file", "blob", "about"}
+
+# Executable/installer extensions that should never be the target of a "job offer".
+EXECUTABLE_EXTS = (
+    ".exe", ".scr", ".apk", ".msi", ".bat", ".cmd", ".com", ".jar", ".vbs",
+    ".ps1", ".hta", ".iso", ".dmg", ".pif",
+)
 
 SAFE_BAND = "NONE"
 
@@ -148,6 +159,11 @@ def _is_ip_literal(host: str) -> bool:
     return ":" in host                       # IPv6 literal
 
 
+def _has_word(haystack: str, word: str) -> bool:
+    """Substring match bounded by non-alphanumerics, so 'account' misses 'accounting'."""
+    return re.search(rf"(?<![a-z0-9]){re.escape(word)}(?![a-z0-9])", haystack) is not None
+
+
 def _sld(domain: str) -> str:
     """Second-level label, e.g. 'jmdcareermaker' from 'jmdcareermaker.com'."""
     return domain.split(".")[0] if domain else ""
@@ -164,12 +180,38 @@ def analyze_url(url: str, brand_domains: Optional[tuple] = None,
         v.advice = ["Provide a URL to analyse."]
         return v
 
+    # Pseudo-schemes carry executable content rather than a destination; they have
+    # no host to analyse, so they are judged on the scheme alone and short-circuit.
+    scheme_prefix = raw.split(":", 1)[0].lower() if ":" in raw else ""
+    if scheme_prefix in DANGEROUS_SCHEMES:
+        v.scheme = scheme_prefix
+        v.signals.append(Signal(
+            "dangerous_scheme", "CRITICAL", 60,
+            f"'{scheme_prefix}:' links execute content instead of opening a page — "
+            f"never click one sent by e-mail."))
+        v.risk_score, v.risk_band, v.verdict = 60, _band(60), _verdict(60)
+        v.advice = [f"Do NOT click. A '{scheme_prefix}:' link runs code in your browser.",
+                    "Report it to the security team — this is not a normal web link."]
+        return v
+
     # Many pasted links omit the scheme; record that, then parse with a stand-in.
     had_scheme = "://" in raw
-    parsed = urlsplit(raw if had_scheme else "http://" + raw)
+    try:
+        parsed = urlsplit(raw if had_scheme else "http://" + raw)
+        host = (parsed.hostname or "").lower().rstrip(".")
+        port = parsed.port                      # property: raises on a malformed port
+    except ValueError as e:
+        v.signals.append(Signal("malformed_url", "HIGH", 35,
+                                f"URL could not be parsed ({e}) — malformed or deliberately obfuscated."))
+        v.risk_score, v.risk_band, v.verdict = 35, _band(35), _verdict(35)
+        v.advice = ["Malformed link — do not click. Ask the sender to resend it in plain text."]
+        return v
+
     v.scheme = parsed.scheme if had_scheme else ""
+    # A pasted link with no scheme is not evidence of an insecure site — the user
+    # simply didn't type "https://". Only an explicit http:// counts against it.
     v.is_https = parsed.scheme == "https"
-    host = (parsed.hostname or "").lower().rstrip(".")
+    explicit_insecure = had_scheme and parsed.scheme == "http"
     v.host = host
     if not host:
         v.signals.append(Signal("unparseable", "HIGH", 30, "Could not extract a host from the URL."))
@@ -205,6 +247,15 @@ def analyze_url(url: str, brand_domains: Optional[tuple] = None,
     if "xn--" in host:
         sigs.append(Signal("punycode_homograph", "HIGH", 30,
                            "Host uses punycode (xn--), often a homograph that mimics real letters."))
+
+    # 4b. Raw (non-punycode) non-ASCII in the host — a homoglyph the browser will
+    #     display as ordinary Latin text. Punycode is caught above; this catches the
+    #     form that arrives already decoded.
+    if any(ord(c) > 127 for c in host):
+        confusables = "".join(sorted({c for c in host if ord(c) > 127}))
+        sigs.append(Signal("unicode_homoglyph", "CRITICAL", 40,
+                           f"Host contains non-Latin character(s) '{confusables}' that render like "
+                           f"ordinary letters — a homograph attack."))
 
     # 5. Brand impersonation (only when it is NOT the genuine domain).
     if not v.matches_official:
@@ -249,22 +300,37 @@ def analyze_url(url: str, brand_domains: Optional[tuple] = None,
         sigs.append(Signal("noisy_host", "LOW", 10,
                            f"Host has {hyphens} hyphen(s) and {digits} digit(s) — auto-generated look."))
 
-    # 9. No HTTPS.
-    if not v.is_https:
+    # 9. Explicit http:// only. A pasted "example.com/x" with no scheme is not
+    #    evidence of an insecure site, so it must not be penalised here.
+    if explicit_insecure:
         sigs.append(Signal("no_https", "MEDIUM", 12,
                            "Link is not HTTPS — traffic can be read or tampered with in transit."))
 
     # 10. Non-standard port.
-    if parsed.port and parsed.port not in (80, 443):
+    if port and port not in (80, 443):
         sigs.append(Signal("non_standard_port", "MEDIUM", 12,
-                           f"Connects on unusual port {parsed.port} instead of 80/443."))
+                           f"Connects on unusual port {port} instead of 80/443."))
 
-    # 11. Sensitive keywords in the path/query.
+    # 11. Sensitive keywords in the path/query, matched on word boundaries so
+    #     "/accounting" and "/updates" don't masquerade as "account"/"update".
+    #     The firm's own site legitimately has /login and /account pages, so this
+    #     only counts against a domain that is not the genuine one.
     path_q = f"{parsed.path}?{parsed.query}".lower()
-    hits = sorted({w for w in SENSITIVE_PATH_WORDS if w in path_q})
-    if hits:
+    hits = sorted({w for w in SENSITIVE_PATH_WORDS if _has_word(path_q, w)})
+    if hits and not v.matches_official:
         sigs.append(Signal("sensitive_path", "MEDIUM", 12,
                            f"Path requests sensitive actions ({', '.join(hits)}) — common in credential-harvest pages."))
+
+    # 11b. Executable payload disguised as a document.
+    path_l = parsed.path.lower()
+    if path_l.endswith(EXECUTABLE_EXTS):
+        double = any(f"{doc}{exe}" in path_l
+                     for doc in (".pdf", ".doc", ".docx", ".jpg", ".png", ".zip")
+                     for exe in EXECUTABLE_EXTS)
+        sigs.append(Signal(
+            "executable_download", "CRITICAL" if double else "HIGH", 40 if double else 30,
+            "Link downloads an executable"
+            + (" disguised with a double extension." if double else " rather than opening a page.")))
 
     # 12. Credentials leaked in the query string.
     if any(k in parsed.query.lower() for k in ("password=", "passwd=", "token=", "secret=")):

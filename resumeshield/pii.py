@@ -87,15 +87,40 @@ EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 PHONE_RE = re.compile(r"(?<!\d)(?:\+?91[\-\s]?)?[6-9]\d{4}[\-\s]?\d{5}(?!\d)")
 AADHAAR_RE = re.compile(r"(?<!\d)\d{4}\s?\d{4}\s?\d{4}(?!\d)")
 PAN_RE = re.compile(r"\b[A-Z]{5}[0-9]{4}[A-Z]\b")
-PASSPORT_RE = re.compile(r"\b[A-PR-WYa-prwy][0-9]{7}\b")
 GSTIN_RE = re.compile(r"\b\d{2}[A-Z]{5}\d{4}[A-Z][0-9A-Z]Z[0-9A-Z]\b")
 CARD_RE = re.compile(r"(?<!\d)(?:\d[ -]?){13,16}(?!\d)")
-PIN_RE = re.compile(r"(?<!\d)[1-9]\d{5}(?!\d)")
+
+# A bare 6-digit number is far more often a salary, a score or a headcount than a
+# postal code. Requiring address context is the single biggest false-positive
+# reduction in this module, so PIN codes are only accepted when they follow an
+# explicit PIN label or trail an address-like phrase.
+PIN_LABELLED_RE = re.compile(
+    r"\b(?:PIN|PIN\s?code|Pincode|Postal\s?code|Zip)\b[\s:\-]*(?<!\d)([1-9]\d{5})(?!\d)", re.I)
+PIN_AFTER_PLACE_RE = re.compile(
+    r"(?:Address|Addr|Street|Road|Lane|Nagar|Colony|Sector|City|State|"
+    r"Mumbai|Pune|Delhi|Bengaluru|Bangalore|Chennai|Kolkata|Hyderabad|Ahmedabad|"
+    r"Jaipur|Lucknow|Noida|Gurgaon|Gurugram|Thane|Nashik|Indore|Bhopal)"
+    r"[^\n]{0,60}?(?<!\d)([1-9]\d{5})(?!\d)", re.I)
+
+# Passport numbers look like many ordinary reference codes, so require the word.
+PASSPORT_CTX_RE = re.compile(
+    r"\bpassport\b(?:\s*(?:no|number|#))?[\s:\-]*\b([A-PR-WYa-prwy][0-9]{7})\b", re.I)
+
+# --- additional Indian identifiers commonly present on real resumes ---------
+IFSC_RE = re.compile(r"\b([A-Z]{4}0[A-Z0-9]{6})\b")
+UAN_RE = re.compile(r"\b(?:UAN|Universal\s+Account\s+(?:No|Number))\b[\s:\-]*(?<!\d)(\d{12})(?!\d)", re.I)
+VOTER_ID_RE = re.compile(
+    r"\b(?:Voter\s*(?:ID|Id)?|EPIC)\b(?:\s*(?:no|number|#))?[\s:\-]*\b([A-Z]{3}\d{7})\b", re.I)
+UPI_ID_RE = re.compile(
+    r"\b([A-Za-z0-9.\-_]{2,50}@(?:okhdfcbank|okicici|oksbi|okaxis|ybl|paytm|apl|"
+    r"axl|ibl|upi|hdfcbank|icici|sbi|axisbank|kotak|freecharge))\b", re.I)
+DRIVING_LICENCE_RE = re.compile(
+    r"\b(?:DL|Driving\s+Licen[cs]e)\b(?:\s*(?:no|number|#))?[\s:\-]*"
+    r"([A-Z]{2}[\s\-]?\d{2}[\s\-]?(?:19|20)?\d{2}[\s\-]?\d{6,7})\b", re.I)
 URL_RE = re.compile(r"https?://(?:www\.)?(?:linkedin\.com|github\.com|instagram\.com|facebook\.com)/\S+", re.I)
 DOB_RE = re.compile(
     r"\b(?:DOB|D\.O\.B\.?|date of birth)\b[:\s]*"
     r"(\d{1,2}[\-/]\d{1,2}[\-/]\d{2,4}|\d{1,2}\s+\w+\s+\d{4})", re.I)
-DATE_RE = re.compile(r"\b\d{1,2}[\-/]\d{1,2}[\-/](?:19|20)\d{2}\b")
 NAME_RE = re.compile(r"\b(?:Name|Candidate|Full Name)\b[ \t:]+([A-Z][a-z]+(?:[ \t]+[A-Z][a-z]+){1,2})")
 ACCT_CTX_RE = re.compile(
     r"\b(?:a/?c|account)\b[^\d]{0,20}(\d{9,18})", re.I)
@@ -116,11 +141,21 @@ def detect(text: str) -> List[Match]:
     matches += _find(PHONE_RE, text, "PHONE", "CONTACT", 0.9)
     matches += _find(PAN_RE, text, "PAN", "GOVERNMENT_ID", 0.95)
     matches += _find(GSTIN_RE, text, "GSTIN", "GOVERNMENT_ID", 0.95)
-    matches += _find(PASSPORT_RE, text, "PASSPORT", "GOVERNMENT_ID", 0.6)
     matches += _find(URL_RE, text, "PERSONAL_URL", "ONLINE", 0.8)
     matches += _find(NAME_RE, text, "NAME", "IDENTITY", 0.85, group=1)
     matches += _find(DOB_RE, text, "DOB", "IDENTITY", 0.9, group=1)
-    matches += _find(PIN_RE, text, "PIN_CODE", "LOCATION", 0.5)
+
+    # Context-gated detectors — these patterns are too generic to trust unlabelled.
+    matches += _find(PASSPORT_CTX_RE, text, "PASSPORT", "GOVERNMENT_ID", 0.9, group=1)
+    matches += _find(PIN_LABELLED_RE, text, "PIN_CODE", "LOCATION", 0.9, group=1)
+    matches += _find(PIN_AFTER_PLACE_RE, text, "PIN_CODE", "LOCATION", 0.75, group=1)
+
+    # Additional Indian identifiers seen on real resumes (all DPDP-relevant).
+    matches += _find(IFSC_RE, text, "IFSC", "FINANCIAL", 0.9, group=1)
+    matches += _find(UAN_RE, text, "UAN", "GOVERNMENT_ID", 0.9, group=1)
+    matches += _find(VOTER_ID_RE, text, "VOTER_ID", "GOVERNMENT_ID", 0.9, group=1)
+    matches += _find(UPI_ID_RE, text, "UPI_ID", "FINANCIAL", 0.85, group=1)
+    matches += _find(DRIVING_LICENCE_RE, text, "DRIVING_LICENCE", "GOVERNMENT_ID", 0.85, group=1)
 
     # Aadhaar: only accept Verhoeff-valid 12-digit groups.
     for m in AADHAAR_RE.finditer(text):

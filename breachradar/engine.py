@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
@@ -75,8 +76,20 @@ class BreachRadar:
         local = email.strip().lower().split("@")[0]
         high_value = local in HIGH_VALUE_LOCALPARTS
 
-        enriched, score, pwd = [], 0, False
+        # The same account can appear more than once for a breach (multiple dumps of
+        # the same incident). Collapse by breach name first — counting an incident
+        # twice inflates the score and makes accounts saturate at 100, which destroys
+        # the ranking the org-wide scan depends on. Keep the worst variant of each.
+        by_name: Dict[str, dict] = {}
         for h in hits:
+            name = h.get("breach", "")
+            prev = by_name.get(name)
+            if prev is None or (h.get("password_exposed") and not prev.get("password_exposed")):
+                by_name[name] = h
+        unique_hits = list(by_name.values())
+
+        enriched, raw_score, pwd = [], 0.0, False
+        for h in unique_hits:
             meta = self.breaches.get(h["breach"], {})
             sev = meta.get("severity", "LOW")
             bdate = meta.get("date", "2000-01-01")
@@ -86,14 +99,18 @@ class BreachRadar:
             if h.get("password_exposed"):
                 contrib += 25
                 pwd = True
-            score += contrib
+            raw_score += contrib
             enriched.append({"breach": h["breach"], "date": bdate, "severity": sev,
                              "classes": meta.get("classes", []),
                              "password_exposed": h.get("password_exposed", False)})
 
-        if high_value and hits:
-            score += 15
-        score = int(min(round(score), 100))
+        if high_value and unique_hits:
+            raw_score += 15
+
+        # Compress with diminishing returns instead of a hard clamp. A hard min(x,100)
+        # made every badly-exposed account tie at exactly 100; this keeps the 0-100
+        # range while preserving the ordering between them.
+        score = int(round(100 * (1 - math.exp(-raw_score / 70.0)))) if raw_score > 0 else 0
         band = ("CRITICAL" if score >= 70 else "HIGH" if score >= 45
                 else "MEDIUM" if score >= 20 else "LOW" if score > 0 else "NONE")
 
