@@ -157,6 +157,49 @@ def test_middleware_rate_limits():
         main._limiter = saved
 
 
+
+def test_rate_limiter_evicts_idle_clients():
+    """Without eviction, one deque per client id leaks memory forever — a slow
+    exhaustion vector for any endpoint reachable by many distinct IPs."""
+    rl = sec.RateLimiter(limit=5, window_seconds=1)
+    t = 0.0
+    for i in range(20_000):
+        rl.allow(f"ip:{i}", now=t)
+        t += 0.01
+    # 20k distinct clients over 200 simulated seconds; only recent ones survive.
+    assert rl.tracked_clients() < 5_000, rl.tracked_clients()
+
+
+def test_rate_limiter_eviction_does_not_forgive_active_clients():
+    """Sweeping must not reset a client that is still inside its window."""
+    rl = sec.RateLimiter(limit=3, window_seconds=100)
+    for i in range(3):
+        assert rl.allow("busy", now=float(i))[0]
+    # Force a sweep well past SWEEP_EVERY_SECONDS but still inside the window.
+    ok, _ = rl.allow("busy", now=70.0)
+    assert ok is False
+
+
+def test_rate_limiter_is_thread_safe_under_contention():
+    import threading
+
+    rl = sec.RateLimiter(limit=10_000, window_seconds=60)
+    errors = []
+
+    def hammer():
+        try:
+            for _ in range(500):
+                rl.allow("shared")
+        except Exception as e:  # noqa: BLE001
+            errors.append(e)
+
+    threads = [threading.Thread(target=hammer) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert not errors, errors
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

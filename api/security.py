@@ -85,16 +85,38 @@ class RateLimiter:
     ``allow`` returns (ok, retry_after_seconds).
     """
 
+    # Without eviction, one deque per distinct client id is retained forever, so a
+    # stream of unique IPs (or forged keys) is a slow memory-exhaustion vector.
+    # Idle clients are swept periodically; the sweep is O(clients) and amortised.
+    SWEEP_EVERY_SECONDS = 60.0
+    MAX_TRACKED_CLIENTS = 10_000
+
     def __init__(self, limit: int, window_seconds: float) -> None:
         self.limit = max(1, int(limit))
         self.window = float(window_seconds)
         self._hits: Dict[str, Deque[float]] = {}
         self._lock = threading.Lock()
+        self._last_sweep = 0.0
+
+    def _sweep(self, now: float) -> None:
+        """Drop clients with no activity inside the window. Caller holds the lock."""
+        cutoff = now - self.window
+        stale = [cid for cid, q in self._hits.items() if not q or q[-1] <= cutoff]
+        for cid in stale:
+            del self._hits[cid]
+        # Hard ceiling in case a burst outpaces the sweep interval: keep the most
+        # recently active clients, since evicting an active one only forgives it.
+        if len(self._hits) > self.MAX_TRACKED_CLIENTS:
+            ordered = sorted(self._hits.items(), key=lambda kv: kv[1][-1], reverse=True)
+            self._hits = dict(ordered[: self.MAX_TRACKED_CLIENTS])
+        self._last_sweep = now
 
     def allow(self, client_id: str, now: float | None = None) -> tuple[bool, float]:
         now = time.monotonic() if now is None else now
         cutoff = now - self.window
         with self._lock:
+            if now - self._last_sweep >= self.SWEEP_EVERY_SECONDS:
+                self._sweep(now)
             q = self._hits.setdefault(client_id, deque())
             while q and q[0] <= cutoff:
                 q.popleft()
@@ -103,6 +125,10 @@ class RateLimiter:
                 return False, retry_after
             q.append(now)
             return True, 0.0
+
+    def tracked_clients(self) -> int:
+        with self._lock:
+            return len(self._hits)
 
     def reset(self) -> None:
         with self._lock:

@@ -15,6 +15,8 @@ from dataclasses import asdict, dataclass, field
 from typing import Callable, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
+from siteguard.netguard import ScanTargetRefused, assert_scannable  # noqa: F401
+
 SEVERITY_SCORE = {"CRITICAL": 40, "HIGH": 20, "MEDIUM": 10, "LOW": 4, "INFO": 0}
 
 # Security headers we expect on a hardened site.
@@ -203,12 +205,17 @@ def _tls_info(host: str, port: int = 443) -> Dict[str, str]:
         return {"tls_error": str(e)}
 
 
-def scan(url: str, authorized: bool, fetcher: Optional[Callable] = None) -> ScanResult:
+def scan(url: str, authorized: bool, fetcher: Optional[Callable] = None,
+         require_allowlist: bool = True) -> ScanResult:
     """
     fetcher(method, url) -> (status:int, headers:dict, body:str)
     If None, a live requests-based fetcher is used (requires `authorized=True`).
+
+    `require_allowlist` gates network-exposed callers (the API) behind
+    JMD_SCAN_ALLOWLIST. A trusted local operator (the CLI) may pass False, which
+    still enforces the private-address block — see siteguard/netguard.py.
     """
-    parsed = urlparse(url if "://" in url else "https://" + url)
+    parsed = urlparse(url if "://" in (url or "") else "https://" + (url or ""))
     host = parsed.hostname or url
     scheme = parsed.scheme or "https"
     base = f"{scheme}://{host}"
@@ -218,6 +225,9 @@ def scan(url: str, authorized: bool, fetcher: Optional[Callable] = None) -> Scan
         if not authorized:
             raise PermissionError(
                 "Live scan refused: set authorized=True only for domains you own/control.")
+        # `authorized` arrives from the caller, so it can never be the only gate:
+        # validate the destination server-side before touching the network.
+        assert_scannable(url, require_allowlist=require_allowlist)
         fetcher = _requests_fetcher
 
     info: Dict[str, str] = {"target": base}
@@ -225,9 +235,13 @@ def scan(url: str, authorized: bool, fetcher: Optional[Callable] = None) -> Scan
         status, headers, _ = fetcher("GET", base)
         info["http_status"] = str(status)
     except Exception as e:  # noqa: BLE001
+        # Never echo the raw transport error to the caller: distinguishing
+        # "connection refused" from "timed out" turns this endpoint into an
+        # internal-network mapping oracle. Log detail stays server-side.
+        detail = type(e).__name__ if live else f"{type(e).__name__}: {e}"
         return grade_findings(base, [Finding(
-            "fetch-error", f"Could not reach target: {e}", "INFO",
-            "Connectivity", str(e), "Verify the URL/network.")], info)
+            "fetch-error", "Could not reach target", "INFO",
+            "Connectivity", detail, "Verify the URL is correct and reachable.")], info)
 
     findings = analyze_headers(headers, scheme)
     if scheme == "https" and live:

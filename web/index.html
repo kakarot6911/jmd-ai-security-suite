@@ -102,6 +102,13 @@
     </div>
     <div id="sgAuthWrap" style="display:none;margin-top:8px">
       <label><input type="checkbox" id="sgAuth" style="width:auto"> I confirm I own this domain or am authorized to test it.</label>
+      <div class="notice">
+        <b>This checkbox is not the security control.</b> It records your intent; the server
+        independently enforces the target. Live scanning requires the operator to set
+        <code>JMD_SCAN_ALLOWLIST</code> to the domains this deployment owns, and internal,
+        loopback and cloud-metadata addresses are refused even if allowlisted — so this
+        endpoint can never be used to reach the network behind the server.
+      </div>
     </div>
     <div style="margin-top:14px"><button class="btn" id="sgBtn">▶️ Run scan</button></div>
     <div id="sgResult" style="margin-top:18px"></div>

@@ -36,6 +36,7 @@ case "${1:-help}" in
     $PY siteguard/tests/test_scanner.py
     $PY linkguard/tests/test_engine.py
     $PY linkguard/tests/test_model.py
+    $PY siteguard/tests/test_netguard.py
     $PY breachradar/tests/test_engine.py
     $PY breachradar/tests/test_live.py
     $PY api/tests/test_security.py

@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 import time
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -225,12 +226,33 @@ class HibpClient:
             return None
 
     def _cache_write(self, breaches: List[dict]) -> None:
+        """Write atomically: a reader must never observe a half-written file.
+
+        write_text() truncates then streams, so a concurrent worker reading during
+        the write sees invalid JSON. Writing to a unique temp file in the same
+        directory and os.replace()-ing it makes the swap atomic on POSIX and
+        Windows, so a reader sees either the old file or the new one.
+        """
+        tmp = None
         try:
             self.cache_path.parent.mkdir(parents=True, exist_ok=True)
-            self.cache_path.write_text(json.dumps(
-                {"fetched_at": self._now(), "source": CATALOGUE_URL, "breaches": breaches}))
+            payload = json.dumps(
+                {"fetched_at": self._now(), "source": CATALOGUE_URL, "breaches": breaches})
+            fd, tmp_name = tempfile.mkstemp(
+                dir=str(self.cache_path.parent), prefix=".hibp-", suffix=".tmp")
+            tmp = Path(tmp_name)
+            with os.fdopen(fd, "w") as fh:
+                fh.write(payload)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp, self.cache_path)
+            tmp = None
         except Exception:                               # noqa: BLE001 — cache is an optimisation
-            pass
+            if tmp is not None:
+                try:
+                    tmp.unlink()
+                except OSError:
+                    pass
 
     def catalogue(self, refresh: bool = False) -> List[dict]:
         """

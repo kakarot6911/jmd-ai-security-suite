@@ -138,6 +138,8 @@ input:focus,textarea:focus,select:focus{outline:0;border-color:var(--primary);bo
 .notice{background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.4);border-radius:12px;
   padding:12px 14px;color:#c7d2fe;font-size:.9rem;margin:12px 0}
 .ok{background:rgba(52,211,153,.12);border-color:rgba(52,211,153,.4);color:#a7f3d0}
+.notice code{background:#0e1422;border:1px solid var(--line);padding:1px 6px;border-radius:6px;
+  font-family:'JetBrains Mono',monospace;font-size:.82em;color:#c7d2fe}
 
 table{width:100%;border-collapse:collapse;background:#111726;border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:8px}
 th{text-align:left;padding:10px 12px;color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--line)}

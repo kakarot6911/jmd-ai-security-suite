@@ -1,6 +1,6 @@
 # 🛡️ JMD Security Suite
 
-![tests](https://img.shields.io/badge/tests-70%20passing-brightgreen)
+![tests](https://img.shields.io/badge/tests-85%20passing-brightgreen)
 ![python](https://img.shields.io/badge/python-3.14-blue)
 ![license](https://img.shields.io/badge/license-MIT-green)
 ![docker](https://img.shields.io/badge/docker-ready-2496ED)
@@ -91,7 +91,7 @@ Verified by 11 dedicated tests in `api/tests/test_security.py`.
 ```bash
 ./run.sh setup     # install deps (already done)
 ./run.sh data      # build BreachRadar corpus (already done)
-./run.sh test      # run all 70 tests
+./run.sh test      # run all 85 tests
 ./run.sh demo      # CLI demo of the four suite tools
 
 # individual dashboards (also available standalone)
@@ -212,6 +212,25 @@ the specific defect classes closed. Two changes matter beyond the score:
 - **SiteGuard grades header *values*, not their presence.** A neutered header is worse
   than a missing one because it passes a checklist scan.
 
+### Security hardening of the scanner itself
+SiteGuard is the one tool that makes the **server** fetch a caller-supplied URL, which made
+it an SSRF vector: `authorized` arrives in the request body, so it gated nothing. A caller
+could reach `http://169.254.169.254/` (cloud metadata — a live endpoint on Render, which
+`render.yaml` targets), container-internal services, or the host's own ports, and read the
+result back through the scan output.
+
+Two independent server-side gates now apply (`siteguard/netguard.py`, 12 tests):
+
+1. **Destination filter** — the hostname is resolved and *every* returned address must be
+   public unicast. Loopback, RFC1918, link-local, reserved, multicast and IPv4-mapped-IPv6
+   (`::ffff:127.0.0.1`) are refused. This holds even for an allowlisted host.
+2. **Allowlist** — the target's domain must be in `JMD_SCAN_ALLOWLIST`. Unset ⇒ live
+   scanning is disabled via the API entirely, so a deployment is never an open scanning
+   proxy. Offline demo mode is unaffected.
+
+Transport errors are no longer echoed back either: distinguishing "connection refused" from
+"timed out" turned the endpoint into an internal-network mapping oracle.
+
 ### Robustness
 `./run.sh fuzz` drives every tool with empty values, wrong types, 100k-character strings,
 null bytes, unicode, path traversal, template-injection and malformed URLs — **202 hostile
@@ -223,7 +242,7 @@ request returned a valid HTTP status (200/400/422), never a 500.
 - **Safe by default:** no destructive actions; live scanning requires authorization;
   breach data is synthetic; PII is redacted, never stored.
 - **Measured:** accuracy is evaluated against labelled cases, not claimed (`./run.sh eval`).
-- **Tested:** 70 standalone tests (`./run.sh test`), no network required — the live-data
+- **Tested:** 85 standalone tests (`./run.sh test`), no network required — the live-data
   layer is tested through an injected fetcher.
 - **Hardened:** the API ships with key auth, rate limiting, security headers and input caps.
 - **Reproducible:** seeded datasets, pinned deps, Python 3.14.

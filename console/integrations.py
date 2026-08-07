@@ -7,6 +7,7 @@ from __future__ import annotations
 import functools
 import os
 import sys
+import threading
 from pathlib import Path
 
 SUITE_ROOT = Path(__file__).resolve().parents[1]
@@ -56,11 +57,14 @@ def resumeshield_redact(text: str, keep_last: int = 0) -> dict:
     }
 
 
-def siteguard_scan(url: str, authorized: bool = False, demo: str | None = None) -> dict:
+def siteguard_scan(url: str, authorized: bool = False, demo: str | None = None,
+                   require_allowlist: bool = True) -> dict:
     if demo:
         return _scan(f"https://{demo}.demo", authorized=True,
                      fetcher=SITEGUARD_DEMOS[demo]).to_dict()
-    return _scan(url, authorized=authorized).to_dict()
+    # require_allowlist defaults True: this adapter is what the network-facing API
+    # calls, so a live scan must be explicitly permitted by the operator's env.
+    return _scan(url, authorized=authorized, require_allowlist=require_allowlist).to_dict()
 
 
 def linkguard_analyze(url: str) -> dict:
@@ -84,13 +88,17 @@ def org_emails() -> list[str]:
 # Opt-in live feeds. Everything above stays on the offline synthetic corpus so
 # demos and tests are deterministic; these two talk to the real register.
 _hibp_client = None
+_hibp_lock = threading.Lock()
 
 
 def _hibp():
+    """Lazily build the shared HIBP client, once, even under concurrent requests."""
     global _hibp_client
     if _hibp_client is None:
-        from breachradar.live import HibpClient
-        _hibp_client = HibpClient()
+        with _hibp_lock:
+            if _hibp_client is None:          # re-check inside the lock
+                from breachradar.live import HibpClient
+                _hibp_client = HibpClient()
     return _hibp_client
 
 

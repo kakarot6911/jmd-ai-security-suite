@@ -100,6 +100,7 @@ JMD_API_KEY=my-local-key ./run.sh web
 | `JMD_RATE_WINDOW` | `60` | Rate-limit window, seconds. |
 | `JMD_CORS_ORIGINS` | `*` | Comma-separated allowed origins. |
 | `JMD_MAX_BODY_BYTES` | `65536` | Reject request bodies larger than this (413). |
+| `JMD_SCAN_ALLOWLIST` | *(unset)* | Comma-separated domains SiteGuard may **live-scan**. Unset ⇒ live scanning is disabled via the API (demo mode still works). Internal, loopback and cloud-metadata addresses are refused even when allowlisted. |
 | `PORT` | `8000` | Injected by the host; the container binds to it. |
 | `PHISHGUARD_ROOT` | `~/jmd_phishguard` | Path to the PhishGuard repo (see below). |
 

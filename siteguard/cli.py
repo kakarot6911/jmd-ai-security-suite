@@ -27,7 +27,9 @@ def main():
     if args.demo:
         res = scan(f"https://{args.demo}.demo", authorized=True, fetcher=DEMOS[args.demo])
     elif args.url:
-        res = scan(args.url, authorized=args.authorize)
+        # Trusted local operator: the allowlist is for the network-exposed API.
+        # The private/loopback/metadata block still applies.
+        res = scan(args.url, authorized=args.authorize, require_allowlist=False)
     else:
         ap.error("provide a URL (with --authorize) or --demo {hardened|vulnerable}")
 
