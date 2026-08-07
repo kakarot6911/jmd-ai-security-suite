@@ -5,7 +5,12 @@ const RISK = { CRITICAL:"#f43f5e", HIGH:"#fb923c", MEDIUM:"#facc15", LOW:"#34d39
   NONE:"#34d399", INFO:"#7c8aa8", A:"#34d399", B:"#84cc16", C:"#facc15", D:"#fb923c", F:"#f43f5e" };
 const rc = b => RISK[(b||"").toUpperCase()] || "#7c8aa8";
 const $ = sel => document.querySelector(sel);
-const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+// Escapes both quote styles so the same helper is safe in text nodes AND attribute values.
+// Null/undefined render as "" rather than the literal string "undefined".
+const esc = s => (s === null || s === undefined ? "" : String(s))
+  .replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+// Coerces a possibly-missing numeric field without ever yielding NaN in the UI.
+const num = (v, d = 0) => (Number.isFinite(+v) ? +v : d);
 
 // Optional API key: read from a <meta name="jmd-api-key"> tag so an auth-enabled
 // deployment can serve the site with a working demo key injected at deploy time.
@@ -17,20 +22,35 @@ async function api(path, body, method) {
   if (API_KEY) headers["X-API-Key"] = API_KEY;
   const opt = { method: method || (body ? "POST" : "GET"), headers };
   if (body) opt.body = JSON.stringify(body);
-  const r = await fetch(path, opt);
+
+  let r;
+  try {
+    r = await fetch(path, opt);
+  } catch (e) {                       // network-level failure: server down, DNS, offline
+    throw new Error("Cannot reach the API — is the server running on this port?");
+  }
   if (!r.ok) {
-    let detail = r.statusText;
-    try { detail = (await r.json()).detail || detail; } catch (e) {}
+    // FastAPI reports validation errors as a list of objects under `detail`;
+    // flatten those to a readable sentence instead of showing "[object Object]".
+    let detail = r.status + " " + r.statusText;
+    try {
+      const d = (await r.json()).detail;
+      if (typeof d === "string") detail = d;
+      else if (Array.isArray(d)) detail = d.map(x => x.msg || JSON.stringify(x)).join("; ");
+    } catch (e) { /* non-JSON error body — keep the status line */ }
+    if (r.status === 429) detail = "Rate limit reached — wait a moment and retry.";
+    if (r.status === 401) detail = "API key required or invalid.";
     throw new Error(detail);
   }
   return r.json();
 }
 
-function toast(msg) {
+function toast(msg, ok) {
   const t = document.createElement("div");
-  t.className = "toast"; t.textContent = "⚠️ " + msg;
+  t.className = "toast" + (ok ? " ok" : "");
+  t.textContent = (ok ? "✅ " : "⚠️ ") + msg;
   $("#toast").appendChild(t);
-  setTimeout(() => t.remove(), 5000);
+  setTimeout(() => t.remove(), ok ? 3000 : 6000);
 }
 
 async function withLoading(btn, label, fn) {
@@ -61,10 +81,14 @@ function donut(value, band, center, label) {
         font-family="Inter" letter-spacing="1">${esc((band||"").toUpperCase())}</text>
     </svg>${label ? `<div class="muted" style="font-size:.82rem">${esc(label)}</div>` : ""}</div>`;
 }
+// A single rAF can fire before the browser has computed style for a just-inserted
+// node, which makes the transition snap instead of animate. Two frames guarantee
+// the initial value has been recalculated, so the tween always plays.
+function nextFrame(fn) { requestAnimationFrame(() => requestAnimationFrame(fn)); }
+
 function animateDonuts(scope) {
-  (scope || document).querySelectorAll(".ring").forEach(c => {
-    requestAnimationFrame(() => { c.style.strokeDashoffset = c.dataset.off; });
-  });
+  const rings = (scope || document).querySelectorAll(".ring");
+  if (rings.length) nextFrame(() => rings.forEach(c => { c.style.strokeDashoffset = c.dataset.off; }));
 }
 function bigBadge(band, sub) {
   const c = rc(band);
@@ -86,24 +110,41 @@ function bars(items) {
   }).join("") + `</div>`;
 }
 function animateBars(scope) {
-  (scope || document).querySelectorAll(".fill").forEach(f =>
-    requestAnimationFrame(() => { f.style.width = f.dataset.w + "%"; }));
+  const fills = (scope || document).querySelectorAll(".fill");
+  if (fills.length) nextFrame(() => fills.forEach(f => { f.style.width = f.dataset.w + "%"; }));
 }
+// Every result panel animates the same way — one call instead of two at each site.
+function paint(scope) { animateDonuts(scope); animateBars(scope); }
 function tile(lab, val, sub, accent) {
   return `<div class="tile" style="border-top:3px solid ${accent}">
     <div class="lab">${esc(lab)}</div><div class="val">${esc(val)}</div>
     ${sub ? `<div class="sub">${esc(sub)}</div>` : ""}</div>`;
 }
 
-/* ---- navigation ---- */
+/* ---- navigation (hash-routed, so views are refreshable, shareable and Back-able) ---- */
+const VIEWS = ["home", "phishguard", "resumeshield", "siteguard", "linkguard", "breachradar"];
+
+function show(name) {
+  if (!VIEWS.includes(name)) name = "home";
+  document.querySelectorAll(".nav button").forEach(x => {
+    const on = x.dataset.view === name;
+    x.classList.toggle("active", on);
+    if (on) x.setAttribute("aria-current", "page"); else x.removeAttribute("aria-current");
+  });
+  document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+  const view = $("#view-" + name);
+  view.classList.add("active");
+  document.title = name === "home"
+    ? "JMD Security Console"
+    : name.charAt(0).toUpperCase() + name.slice(1) + " · JMD Security Console";
+  paint(view);
+}
+
 $("#nav").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
-  document.querySelectorAll(".nav button").forEach(x => x.classList.remove("active"));
-  b.classList.add("active");
-  document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
-  const view = $("#view-" + b.dataset.view); view.classList.add("active");
-  animateDonuts(view); animateBars(view);
+  location.hash = b.dataset.view;      // hashchange drives the actual switch
 });
+addEventListener("hashchange", () => show(location.hash.slice(1)));
 
 /* ---- overview ---- */
 const TOOLS = [
@@ -113,27 +154,52 @@ const TOOLS = [
   ["🔗","LinkGuard","Flags typosquats, shorteners & impersonation in job links sent to or from candidates.","linkguard"],
   ["📡","BreachRadar","Monitors staff/recruiter accounts for exposure in known data breaches.","breachradar"],
 ];
+function apiOffline(msg) {
+  const box = $("#apiState");
+  box.hidden = false;
+  box.innerHTML = `<b>API unreachable</b><br>${esc(msg)}<br><button type="button" id="retryBtn">↻ Retry</button>`;
+  $("#retryBtn").addEventListener("click", () => { box.hidden = true; loadHome(); });
+}
+
+// The overview draws from two independent endpoints. They are loaded separately so a
+// failure in one never blanks the other, and neither can leave a skeleton spinning.
 async function loadHome() {
+  const n = TOOLS.length;
+  let online = n;
+
   try {
     const health = await api("/health");
     const mods = health.modules || {};
-    const n = TOOLS.length;
-    $("#statusLab").textContent = "Modules · " + Object.values(mods).filter(Boolean).length + "/" + n;
+    online = TOOLS.filter(t => mods[t[3]] !== false).length;
+    $("#statusLab").textContent = "Modules · " + online + "/" + n;
     $("#statusList").innerHTML = TOOLS.map(t => {
       const on = mods[t[3]] !== false;
-      return `<div class="row" style="display:flex"><span class="dot ${on?"on":"off"}"></span>${t[0]} ${t[1]}</div>`;
+      return `<div class="row" style="display:flex"><span class="dot ${on?"on":"off"}"></span>${t[0]} ${esc(t[1])}</div>`;
     }).join("");
-
+    $("#toolCards").innerHTML = TOOLS.map(t => {
+      const on = mods[t[3]] !== false;
+      return `<div class="card"><div class="ico">${t[0]}</div><h3>${esc(t[1])}</h3><p>${esc(t[2])}</p>
+       <div style="margin-top:14px">${chip(on ? "Online" : "Unavailable", on ? "LOW" : "CRITICAL")}</div></div>`;
+    }).join("");
+    $("#apiState").hidden = true;
+  } catch (e) {
+    $("#statusLab").textContent = "Modules · offline";
+    $("#statusList").innerHTML = TOOLS.map(t =>
+      `<div class="row" style="display:flex"><span class="dot off"></span>${t[0]} ${esc(t[1])}</div>`).join("");
     $("#toolCards").innerHTML = TOOLS.map(t =>
-      `<div class="card"><div class="ico">${t[0]}</div><h3>${t[1]}</h3><p>${t[2]}</p>
-       <div style="margin-top:14px">${chip("Online","LOW")}</div></div>`).join("");
+      `<div class="card"><div class="ico">${t[0]}</div><h3>${esc(t[1])}</h3><p>${esc(t[2])}</p>
+       <div style="margin-top:14px">${chip("Unavailable","CRITICAL")}</div></div>`).join("");
+    apiOffline(e.message);
+  }
 
+  try {
     const org = await api("/breachradar/scan-org");
     const total = org.length, exposed = org.filter(x => x.breach_count > 0).length;
     const crit = org.filter(x => ["CRITICAL","HIGH"].includes(x.risk_band)).length;
     const pwd = org.filter(x => x.password_exposed).length;
     $("#kpis").innerHTML =
-      tile("Modules online", n + "/" + n, "all systems go","#22d3ee") +
+      tile("Modules online", online + "/" + n, online === n ? "all systems go" : "degraded",
+           online === n ? "#22d3ee" : RISK.HIGH) +
       tile("Accounts monitored", total, "staff + recruiter inboxes","#6366f1") +
       tile("Exposed accounts", exposed, pwd + " with password leak", RISK.HIGH) +
       tile("High / critical", crit, "need action now", RISK.CRITICAL);
@@ -142,8 +208,12 @@ async function loadHome() {
     $("#orgDonut").innerHTML = `<div class="lab" style="margin-bottom:6px;color:#93a1bd">Org exposure index</div>` +
       donut(ratio, crit ? "CRITICAL" : "LOW", ratio + "%", "accounts at high/critical risk");
     $("#orgBars").innerHTML = bars(org.map(x => ({ label: x.email.split("@")[0], value: x.risk_score, band: x.risk_band })));
-    animateDonuts($("#view-home")); animateBars($("#view-home"));
-  } catch (e) { toast("Backend unreachable: " + e.message); }
+  } catch (e) {
+    $("#kpis").innerHTML = tile("Modules online", online + "/" + n, "", "#22d3ee");
+    $("#orgDonut").innerHTML = `<span class="muted">Exposure data unavailable</span>`;
+    $("#orgBars").innerHTML = `<span class="muted">${esc(e.message)}</span>`;
+  }
+  paint($("#view-home"));
 }
 
 /* ---- phishguard ---- */
@@ -161,17 +231,22 @@ $("#phBtn").addEventListener("click", () => withLoading($("#phBtn"), "Analyzing�
   const text = $("#phText").value.trim();
   if (!text) { toast("Paste a message first."); return; }
   const v = await api("/phishguard/analyze", { text, sender_email: $("#phSender").value, claimed_company: $("#phCompany").value });
-  const flags = (v.flags || []).map(f => chip(f.name, f.severity >= .8 ? "CRITICAL" : f.severity >= .5 ? "HIGH" : "MEDIUM")).join("");
-  const rows = (v.flags || []).map(f => `<tr><td>${chip(f.severity.toFixed(2), f.severity>=.8?"CRITICAL":f.severity>=.5?"HIGH":"MEDIUM")}</td><td>${esc(f.name)}</td><td>${esc(f.description)}</td></tr>`).join("");
+  const sevBand = s => s >= .8 ? "CRITICAL" : s >= .5 ? "HIGH" : "MEDIUM";
+  const flags = (v.flags || []).map(f => chip(f.name, sevBand(num(f.severity)))).join("");
+  const rows = (v.flags || []).map(f => {
+    const s = num(f.severity);
+    return `<tr><td>${chip(s.toFixed(2), sevBand(s))}</td><td>${esc(f.name)}</td><td>${esc(f.description)}</td></tr>`;
+  }).join("");
+  const pct = Math.round(num(v.fraud_probability) * 100);
   $("#phResult").innerHTML = `<div class="split">
-      ${donut(v.fraud_probability*100, v.risk_band, Math.round(v.fraud_probability*100)+"%", "fraud probability")}
+      ${donut(pct, v.risk_band, pct + "%", "fraud probability")}
       <div>${bigBadge(v.risk_band, v.recommended_action)}
         <div style="margin-top:10px">${chip("Hard block: "+(v.hard_block?"YES":"no"), v.hard_block?"CRITICAL":"LOW")}${chip((v.flags||[]).length+" red flags", (v.flags||[]).length?"HIGH":"LOW")}</div>
         <div class="notice">${esc(v.rationale)}</div></div></div>
     ${flags ? `<div class="sec"><span class="bar"></span><h4>Security red flags</h4></div>${flags}
       <table><thead><tr><th>Severity</th><th>Rule</th><th>Why it matters</th></tr></thead><tbody>${rows}</tbody></table>`
       : `<div class="notice ok">No deterministic red flags fired.</div>`}`;
-  animateDonuts($("#phResult"));
+  paint($("#phResult"));
 }));
 
 /* ---- resumeshield ---- */
@@ -192,7 +267,7 @@ $("#rsBtn").addEventListener("click", () => withLoading($("#rsBtn"), "Scanning�
         <pre class="redacted">${esc(r.redacted_text)}</pre></div>
       <div><div class="sec"><span class="bar"></span><h4>PII inventory</h4></div>
         ${bars(inv.map(([k,v]) => ({label:k, value:v, band:"HIGH"})))}</div></div>`;
-  animateDonuts($("#rsResult")); animateBars($("#rsResult"));
+  paint($("#rsResult"));
 }));
 
 /* ---- siteguard ---- */
@@ -220,7 +295,7 @@ $("#sgBtn").addEventListener("click", () => withLoading($("#sgBtn"), "Scanning�
         <div style="margin-top:10px">${chips||chip("clean","LOW")}</div></div></div>
     ${ (res.findings||[]).length ? `<div class="sec"><span class="bar"></span><h4>Findings (${res.findings.length})</h4></div>${acc}`
        : `<div class="notice ok">No issues found — solid posture.</div>`}`;
-  animateDonuts($("#sgResult"));
+  paint($("#sgResult"));
 }));
 
 /* ---- linkguard ---- */
@@ -248,7 +323,7 @@ $("#lgBtn").addEventListener("click", () => withLoading($("#lgBtn"), "Analyzing�
     chip("ML: " + Math.round(v.ml_probability*100) + "% malicious",
          v.ml_probability >= 0.8 ? "CRITICAL" : v.ml_probability >= 0.5 ? "HIGH" : "LOW");
   const sigs = (v.signals || []).filter(s => s.weight);
-  const rows = sigs.map(s => `<tr><td>${chip(s.severity, s.severity)}</td><td>${esc(s.name)}</td><td>${s.weight}</td><td>${esc(s.detail)}</td></tr>`).join("");
+  const rows = sigs.map(s => `<tr><td>${chip(s.severity, s.severity)}</td><td>${esc(s.name)}</td><td>${esc(s.weight)}</td><td>${esc(s.detail)}</td></tr>`).join("");
   $("#lgResult").innerHTML = `<div class="split">
       ${donut(v.risk_score, v.risk_band, v.risk_score, "risk score")}
       <div>${bigBadge(v.risk_band, v.verdict)}
@@ -258,13 +333,13 @@ $("#lgBtn").addEventListener("click", () => withLoading($("#lgBtn"), "Analyzing�
       : `<div class="notice ok">No red-flag signals — link looks clean.</div>`}
     <div class="sec"><span class="bar"></span><h4>Recommended action</h4></div>
     <ul class="muted">${(v.advice||[]).map(a=>`<li>${esc(a)}</li>`).join("")}</ul>`;
-  animateDonuts($("#lgResult"));
+  paint($("#lgResult"));
 }));
 
 /* ---- breachradar ---- */
 $("#brBtn").addEventListener("click", () => withLoading($("#brBtn"), "Checking…", async () => {
   const x = await api("/breachradar/check", { email: $("#brEmail").value });
-  const brows = (x.breaches||[]).map(b => `<tr><td>${esc(b.breach)}</td><td>${esc(b.date)}</td><td>${chip(b.severity,b.severity)}</td><td>${(b.classes||[]).join(", ")}</td><td>${b.password_exposed?"YES":"no"}</td></tr>`).join("");
+  const brows = (x.breaches||[]).map(b => `<tr><td>${esc(b.breach)}</td><td>${esc(b.date)}</td><td>${chip(b.severity,b.severity)}</td><td>${esc((b.classes||[]).join(", "))}</td><td>${b.password_exposed?"YES":"no"}</td></tr>`).join("");
   $("#brResult").innerHTML = `<div class="split">
       ${donut(x.risk_score, x.risk_band, x.risk_score, "exposure score")}
       <div>${bigBadge(x.risk_band, x.breach_count+" known breach(es)")}
@@ -273,20 +348,48 @@ $("#brBtn").addEventListener("click", () => withLoading($("#brBtn"), "Checking�
        <table><thead><tr><th>Breach</th><th>Date</th><th>Severity</th><th>Data</th><th>Password</th></tr></thead><tbody>${brows}</tbody></table>` : "" }
     <div class="sec"><span class="bar"></span><h4>Recommended actions</h4></div>
     <ul class="muted">${(x.advice||[]).map(a=>`<li>${esc(a)}</li>`).join("")}</ul>`;
-  animateDonuts($("#brResult"));
+  paint($("#brResult"));
 }));
 $("#brOrgBtn").addEventListener("click", () => withLoading($("#brOrgBtn"), "Scanning…", async () => {
   const org = await api("/breachradar/scan-org");
   const exposed = org.filter(x=>x.breach_count>0).length;
   const crit = org.filter(x=>["CRITICAL","HIGH"].includes(x.risk_band)).length;
-  const rows = org.map(x=>`<tr><td>${esc(x.email)}</td><td>${chip(x.risk_band,x.risk_band)}</td><td>${x.risk_score}</td><td>${x.breach_count}</td><td>${x.password_exposed?"YES":"no"}</td></tr>`).join("");
+  const rows = org.map(x=>`<tr><td>${esc(x.email)}</td><td>${chip(x.risk_band,x.risk_band)}</td><td>${esc(x.risk_score)}</td><td>${esc(x.breach_count)}</td><td>${x.password_exposed?"YES":"no"}</td></tr>`).join("");
   $("#brResult").innerHTML = `<div class="grid g3">
       ${tile("Monitored", org.length, "", "#6366f1")}${tile("Exposed", exposed, "", RISK.HIGH)}${tile("High / critical", crit, "", RISK.CRITICAL)}</div>
     <div class="sec"><span class="bar"></span><h4>Exposure by account</h4></div>
     ${bars(org.map(x=>({label:x.email.split("@")[0], value:x.risk_score, band:x.risk_band})))}
     <table style="margin-top:12px"><thead><tr><th>Account</th><th>Risk</th><th>Score</th><th>Breaches</th><th>Password</th></tr></thead><tbody>${rows}</tbody></table>`;
-  animateBars($("#brResult"));
+  paint($("#brResult"));
 }));
 
+/* ---- keyboard ----------------------------------------------------------
+   Enter runs the analysis from a single-line field; Ctrl/Cmd+Enter does the
+   same from a textarea (where a bare Enter must still insert a newline).   */
+const SUBMIT_FOR = { phText:"#phBtn", phSender:"#phBtn", phCompany:"#phBtn",
+  rsText:"#rsBtn", sgUrl:"#sgBtn", lgUrl:"#lgBtn", brEmail:"#brBtn" };
+
+document.addEventListener("keydown", e => {
+  if (e.key !== "Enter") return;
+  const el = e.target;
+  const btn = SUBMIT_FOR[el.id];
+  if (!btn) return;
+  const isArea = el.tagName === "TEXTAREA";
+  if (isArea && !(e.ctrlKey || e.metaKey)) return;   // plain Enter = newline
+  e.preventDefault();
+  const b = $(btn);
+  if (!b.disabled) b.click();
+});
+
+// Alt+1..6 jump between modules — handy when demoing the suite live.
+document.addEventListener("keydown", e => {
+  if (!e.altKey || e.ctrlKey || e.metaKey) return;
+  const i = "123456".indexOf(e.key);
+  if (i === -1) return;
+  e.preventDefault();
+  location.hash = VIEWS[i];
+});
+
 /* boot */
+show(location.hash.slice(1));   // honour a deep link like /#linkguard on first paint
 loadHome();

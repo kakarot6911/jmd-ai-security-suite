@@ -4,16 +4,22 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>JMD Security Console</title>
+<meta name="description" content="Unified security console for JMD The Career Maker — recruitment-fraud detection, candidate-PII redaction, web posture scanning, link analysis and credential-exposure monitoring.">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0a0e17">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 <aside class="sidebar">
   <div class="brand">🛡️ JMD <span class="g">Security</span></div>
   <div class="brand-sub">Unified Security Console</div>
-  <nav class="nav" id="nav">
-    <button data-view="home" class="active">🏠 Overview</button>
+  <nav class="nav" id="nav" aria-label="Security modules">
+    <button data-view="home" class="active" aria-current="page">🏠 Overview</button>
     <button data-view="phishguard">🛡️ PhishGuard</button>
     <button data-view="resumeshield">🪪 ResumeShield</button>
     <button data-view="siteguard">🔐 SiteGuard</button>
@@ -23,10 +29,11 @@
   <div class="status">
     <div class="lab" id="statusLab">Modules</div>
     <div id="statusList"></div>
+    <div class="api-state" id="apiState" hidden></div>
   </div>
 </aside>
 
-<main>
+<main id="main">
   <!-- OVERVIEW -->
   <section id="view-home" class="view active">
     <div class="hero">
@@ -35,7 +42,10 @@
       <p>One pane of glass for recruitment-fraud, candidate-data protection, web posture and
          credential-exposure monitoring across JMD The Career Maker.</p>
     </div>
-    <div class="grid g4" id="kpis"></div>
+    <div class="grid g4" id="kpis">
+      <div class="tile skeleton"></div><div class="tile skeleton"></div>
+      <div class="tile skeleton"></div><div class="tile skeleton"></div>
+    </div>
     <div class="split" style="margin-top:18px">
       <div class="tile center" id="orgDonut"><span class="muted">loading…</span></div>
       <div>
@@ -46,7 +56,9 @@
     <div class="sec"><span class="bar"></span><h4>Security modules</h4></div>
     <div class="grid g2" id="toolCards"></div>
     <div class="foot">JMD Security Suite · PhishGuard · ResumeShield · SiteGuard · LinkGuard · BreachRadar —
-      synthetic data · safe by default</div>
+      synthetic data · safe by default<br>
+      <span style="opacity:.8">Shortcuts: <kbd>Alt</kbd>+<kbd>1</kbd>–<kbd>6</kbd> switch module ·
+      <kbd>Enter</kbd> run · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> run from a text area</span></div>
   </section>
 
   <!-- PHISHGUARD -->
@@ -124,7 +136,7 @@
   </section>
 </main>
 
-<div id="toast"></div>
+<div id="toast" role="status" aria-live="polite" aria-atomic="false"></div>
 <script src="app.js"></script>
 </body>
 </html>
