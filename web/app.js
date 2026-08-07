@@ -1,9 +1,25 @@
 /* JMD Security Console — interactive frontend (vanilla JS, talks to the FastAPI backend) */
 "use strict";
 
-const RISK = { CRITICAL:"#f43f5e", HIGH:"#fb923c", MEDIUM:"#facc15", LOW:"#34d399",
-  NONE:"#34d399", INFO:"#7c8aa8", A:"#34d399", B:"#84cc16", C:"#facc15", D:"#fb923c", F:"#f43f5e" };
-const rc = b => RISK[(b||"").toUpperCase()] || "#7c8aa8";
+// Risk colours come from the stylesheet's theme tokens rather than being baked in
+// here, so light mode gets its darker, AA-contrast variants automatically.
+let _palette = null;
+function palette() {
+  if (_palette) return _palette;
+  const cs = getComputedStyle(document.documentElement);
+  const v = (name, fallback) => (cs.getPropertyValue(name) || "").trim() || fallback;
+  const crit = v("--crit", "#f43f5e"), high = v("--high", "#fb923c"),
+        med = v("--med", "#eab308"), low = v("--low", "#34d399"),
+        info = v("--info", "#8595b4"), gradeB = v("--grade-b", "#84cc16");
+  _palette = { CRITICAL: crit, HIGH: high, MEDIUM: med, LOW: low, NONE: low, INFO: info,
+               A: low, B: gradeB, C: med, D: high, F: crit };
+  return _palette;
+}
+const RISK = new Proxy({}, { get: (_, k) => palette()[k] });   // back-compat for RISK.HIGH
+const rc = b => palette()[(b || "").toUpperCase()] || palette().INFO;
+// Any colour token may be a hex or a function like color-mix(); mixing is the only
+// form that works for both, so never concatenate alpha onto the raw string.
+const tint = (c, pct) => `color-mix(in srgb, ${c} ${pct}%, transparent)`;
 const $ = sel => document.querySelector(sel);
 // Escapes both quote styles so the same helper is safe in text nodes AND attribute values.
 // Null/undefined render as "" rather than the literal string "undefined".
@@ -69,15 +85,15 @@ function donut(value, band, center, label) {
   return `<div class="center">
     <svg width="150" height="150" viewBox="0 0 140 140">
       <defs><linearGradient id="${uid}" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stop-color="${color}"/><stop offset="100%" stop-color="${color}99"/></linearGradient></defs>
-      <circle cx="70" cy="70" r="${r}" fill="none" stroke="#26314d" stroke-width="13"/>
+        <stop offset="0%" stop-color="${color}"/><stop offset="100%" stop-color="${tint(color, 62)}"/></linearGradient></defs>
+      <circle class="donut-track" cx="70" cy="70" r="${r}" fill="none" stroke-width="13"/>
       <circle class="ring" cx="70" cy="70" r="${r}" fill="none" stroke="url(#${uid})" stroke-width="13"
         stroke-linecap="round" transform="rotate(-90 70 70)"
         stroke-dasharray="${circ.toFixed(1)}" stroke-dashoffset="${circ.toFixed(1)}"
         data-off="${off.toFixed(1)}" style="transition:stroke-dashoffset 1.1s cubic-bezier(.22,1,.36,1)"/>
-      <text x="70" y="69" text-anchor="middle" dominant-baseline="middle" font-size="30"
-        font-weight="800" fill="#eef2fb" font-family="Inter">${esc(center)}</text>
-      <text x="70" y="92" text-anchor="middle" font-size="11" fill="#93a1bd"
+      <text class="donut-value" x="70" y="69" text-anchor="middle" dominant-baseline="middle"
+        font-size="30" font-weight="800" font-family="Inter">${esc(center)}</text>
+      <text class="donut-label" x="70" y="92" text-anchor="middle" font-size="11"
         font-family="Inter" letter-spacing="1">${esc((band||"").toUpperCase())}</text>
     </svg>${label ? `<div class="muted" style="font-size:.82rem">${esc(label)}</div>` : ""}</div>`;
 }
@@ -92,12 +108,12 @@ function animateDonuts(scope) {
 }
 function bigBadge(band, sub) {
   const c = rc(band);
-  return `<div class="bigbadge" style="background:linear-gradient(135deg,${c},${c}bb);box-shadow:0 16px 38px ${c}55">
+  return `<div class="bigbadge" style="background:linear-gradient(135deg,${c},${tint(c, 72)});box-shadow:0 14px 34px ${tint(c, 34)}">
     <div class="t">Risk</div><div class="b">${esc(band)}</div>${sub ? `<div class="s">${esc(sub)}</div>` : ""}</div>`;
 }
 function chip(label, key) {
   const c = rc(key);
-  return `<span class="chip" style="background:${c}1f;color:${c};border:1px solid ${c}44">
+  return `<span class="chip" style="background:${tint(c, 12)};color:${c};border:1px solid ${tint(c, 30)}">
     <span class="dot" style="background:${c}"></span>${esc(label)}</span>`;
 }
 function bars(items) {
@@ -105,7 +121,7 @@ function bars(items) {
   return `<div class="bars">` + items.map(i => {
     const c = rc(i.band); const w = Math.round(100 * i.value / max);
     return `<div class="b"><span class="muted">${esc(i.label)}</span>
-      <div class="track"><div class="fill" data-w="${w}" style="background:linear-gradient(90deg,${c},${c}aa)"></div></div>
+      <div class="track"><div class="fill" data-w="${w}" style="background:linear-gradient(90deg,${c},${tint(c, 68)})"></div></div>
       <span style="text-align:right">${esc(i.value)}</span></div>`;
   }).join("") + `</div>`;
 }
@@ -114,12 +130,80 @@ function animateBars(scope) {
   if (fills.length) nextFrame(() => fills.forEach(f => { f.style.width = f.dataset.w + "%"; }));
 }
 // Every result panel animates the same way — one call instead of two at each site.
-function paint(scope) { animateDonuts(scope); animateBars(scope); }
+function wrapTables(scope) {
+  // Tables are the one element wide enough to force horizontal page scroll on a
+  // phone. Give each its own scroll container instead of editing every template.
+  (scope || document).querySelectorAll("table").forEach(t => {
+    if (t.parentElement && t.parentElement.classList.contains("tablewrap")) return;
+    const wrap = document.createElement("div");
+    wrap.className = "tablewrap";
+    t.replaceWith(wrap);
+    wrap.appendChild(t);
+  });
+}
+function paint(scope) { animateDonuts(scope); animateBars(scope); wrapTables(scope); }
 function tile(lab, val, sub, accent) {
   return `<div class="tile" style="border-top:3px solid ${accent}">
     <div class="lab">${esc(lab)}</div><div class="val">${esc(val)}</div>
     ${sub ? `<div class="sub">${esc(sub)}</div>` : ""}</div>`;
 }
+
+/* ---- theme -------------------------------------------------------------
+   Follows the OS until the user chooses, then the choice sticks. The stylesheet
+   keys off data-theme on <html>, so this only has to set one attribute.      */
+const THEME_KEY = "jmd-theme";
+const prefersLight = () => matchMedia("(prefers-color-scheme: light)").matches;
+
+function applyTheme(theme) {
+  const root = document.documentElement;
+  if (theme === "light" || theme === "dark") root.dataset.theme = theme;
+  else delete root.dataset.theme;              // "system"
+  _palette = null;                             // tokens changed; recompute risk colours
+  const effective = theme === "system" ? (prefersLight() ? "light" : "dark") : theme;
+  const btn = $("#themeBtn");
+  if (btn) {
+    btn.textContent = effective === "light" ? "☀️" : "🌙";
+    btn.setAttribute("aria-label",
+      `Switch to ${effective === "light" ? "dark" : "light"} theme`);
+  }
+}
+
+let themeChoice = "system";
+try { themeChoice = localStorage.getItem(THEME_KEY) || "system"; } catch (e) { /* private mode */ }
+applyTheme(themeChoice);
+
+$("#themeBtn").addEventListener("click", () => {
+  const effective = themeChoice === "system" ? (prefersLight() ? "light" : "dark") : themeChoice;
+  themeChoice = effective === "light" ? "dark" : "light";
+  try { localStorage.setItem(THEME_KEY, themeChoice); } catch (e) { /* ignore */ }
+  applyTheme(themeChoice);
+});
+// Track the OS while the user is still on "system".
+matchMedia("(prefers-color-scheme: light)").addEventListener("change", () => {
+  if (themeChoice === "system") applyTheme("system");
+});
+
+/* ---- mobile drawer ------------------------------------------------------ */
+const sidebar = $("#sidebar"), scrim = $("#scrim"), menuBtn = $("#menuBtn");
+
+function setDrawer(open) {
+  sidebar.classList.toggle("open", open);
+  scrim.hidden = !open;
+  scrim.classList.toggle("show", open);
+  menuBtn.setAttribute("aria-expanded", String(open));
+  // Stop the page scrolling behind the drawer.
+  document.body.style.overflow = open ? "hidden" : "";
+  if (open) sidebar.querySelector(".nav button").focus();
+}
+
+menuBtn.addEventListener("click", () => setDrawer(!sidebar.classList.contains("open")));
+scrim.addEventListener("click", () => setDrawer(false));
+addEventListener("keydown", e => {
+  if (e.key === "Escape" && sidebar.classList.contains("open")) {
+    setDrawer(false);
+    menuBtn.focus();
+  }
+});
 
 /* ---- navigation (hash-routed, so views are refreshable, shareable and Back-able) ---- */
 const VIEWS = ["home", "phishguard", "resumeshield", "siteguard", "linkguard", "breachradar"];
@@ -143,6 +227,7 @@ function show(name) {
 $("#nav").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
   location.hash = b.dataset.view;      // hashchange drives the actual switch
+  if (sidebar.classList.contains("open")) setDrawer(false);
 });
 addEventListener("hashchange", () => show(location.hash.slice(1)));
 
