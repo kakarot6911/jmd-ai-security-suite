@@ -12,7 +12,7 @@ from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -161,6 +161,40 @@ def breachradar_check(inp: EmailIn):
 @app.get("/breachradar/scan-org")
 def breachradar_org():
     return ig.breachradar_scan_org()
+
+
+# ---- Real-data routes (Have I Been Pwned) ---------------------------------
+@app.get("/breachradar/range/{prefix}", response_class=PlainTextResponse)
+def breachradar_range(prefix: str):
+    """Relay a 5-hex-char SHA-1 prefix to HIBP's Pwned Passwords range API.
+
+    The browser hashes the password with SubtleCrypto and matches the returned
+    suffixes locally, so the password and its full hash never leave the client.
+    """
+    try:
+        return ig.breachradar_range(prefix)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+
+
+@app.get("/breachradar/catalogue")
+def breachradar_catalogue(refresh: bool = False):
+    """Live statistics from the real, public HIBP breach register (24h cached)."""
+    try:
+        return ig.breachradar_catalogue(refresh=refresh)
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+
+
+@app.post("/breachradar/live-check")
+def breachradar_live_check(inp: EmailIn):
+    """Real per-account breach lookup. Requires a paid HIBP_API_KEY."""
+    try:
+        return {"email": inp.email, "breaches": ig.breachradar_live_account(inp.email)}
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
 
 
 # ---- Static web frontend (mounted LAST so API routes take precedence) -----

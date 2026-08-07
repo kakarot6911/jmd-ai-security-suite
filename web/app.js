@@ -363,11 +363,103 @@ $("#brOrgBtn").addEventListener("click", () => withLoading($("#brOrgBtn"), "Scan
   paint($("#brResult"));
 }));
 
+/* ---- breachradar: REAL password exposure (HIBP k-anonymity) ------------
+   The password is hashed here, in the browser. Only the first 5 hex chars of
+   the SHA-1 are sent to the server, which relays them to HIBP; the remaining
+   35 chars are matched against the response locally. Neither this app's
+   backend nor HIBP can tell which password was checked.                    */
+async function sha1Hex(text) {
+  if (!(window.crypto && crypto.subtle)) {
+    throw new Error("This browser has no SubtleCrypto — open the page over https:// or localhost.");
+  }
+  const buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(text));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("").toUpperCase();
+}
+
+const PWD_BAND = n => n === 0 ? "NONE" : n >= 100000 ? "CRITICAL" : n >= 1000 ? "HIGH" : n >= 10 ? "MEDIUM" : "LOW";
+
+$("#brPwdBtn").addEventListener("click", () => withLoading($("#brPwdBtn"), "Checking…", async () => {
+  const pwd = $("#brPwd").value;
+  if (!pwd) { toast("Type a password to test."); return; }
+
+  const hash = await sha1Hex(pwd);
+  const prefix = hash.slice(0, 5), suffix = hash.slice(5);
+
+  const r = await fetch("/breachradar/range/" + prefix,
+                        API_KEY ? { headers: { "X-API-Key": API_KEY } } : undefined);
+  if (!r.ok) {
+    let d = "HTTP " + r.status;
+    try { d = (await r.json()).detail || d; } catch (e) {}
+    throw new Error(d);
+  }
+  const body = await r.text();
+
+  let seen = 0, candidates = 0;
+  for (const line of body.split("\n")) {
+    const t = line.trim(); if (!t) continue;
+    candidates++;
+    const [sfx, cnt] = t.split(":");
+    if (sfx && sfx.toUpperCase() === suffix) seen = parseInt(cnt, 10) || 0;
+  }
+
+  const band = PWD_BAND(seen);
+  const advice = seen === 0
+    ? ["This password does not appear in any known breach corpus.",
+       "Absence is not proof of strength — still use a long unique passphrase and MFA."]
+    : [`Seen ${seen.toLocaleString()} times in real breach data — treat it as public.`,
+       "Stop using it immediately, everywhere it was reused.",
+       "Replace it with a unique passphrase from a password manager and enable MFA."];
+
+  $("#brPwdResult").innerHTML = `<div class="split">
+      ${donut(seen === 0 ? 0 : Math.min(100, Math.log10(Math.max(seen, 1)) * 14),
+              band, seen === 0 ? "0" : seen >= 1000 ? Math.round(seen / 1000) + "k" : String(seen),
+              "times seen in real breaches")}
+      <div>${bigBadge(band, seen === 0 ? "Not found in any known breach" : "Compromised — do not use")}
+        <div style="margin-top:10px">
+          ${chip("Sent upstream: " + prefix + "…", "INFO")}
+          ${chip(candidates.toLocaleString() + " candidate hashes returned", "INFO")}
+          ${chip("Password never transmitted", "LOW")}
+        </div>
+        <div class="notice">Source: <b>Have I Been Pwned — Pwned Passwords</b> (live).
+          Matching was performed in your browser.</div></div></div>
+    <div class="sec"><span class="bar"></span><h4>Recommended actions</h4></div>
+    <ul class="muted">${advice.map(a => `<li>${esc(a)}</li>`).join("")}</ul>`;
+  paint($("#brPwdResult"));
+  $("#brPwd").value = "";     // don't leave a real credential sitting in the DOM
+}));
+
+/* ---- breachradar: live threat intel from the real HIBP register -------- */
+$("#brIntelBtn").addEventListener("click", () => withLoading($("#brIntelBtn"), "Loading…", async () => {
+  const s = await api("/breachradar/catalogue");
+  const fmt = n => Number(n || 0).toLocaleString();
+  const rows = list => (list || []).map(b =>
+    `<tr><td>${esc(b.title || b.name)}</td><td>${esc(b.date)}</td>
+      <td>${chip(b.severity, b.severity)}</td><td>${esc(fmt(b.pwn_count))}</td>
+      <td>${esc((b.classes || []).join(", "))}</td></tr>`).join("");
+
+  $("#brIntelResult").innerHTML = `<div class="grid g4">
+      ${tile("Known breaches", fmt(s.total_breaches), "in the public register", "#22d3ee")}
+      ${tile("Accounts exposed", fmt(s.total_accounts), "cumulative, all breaches", RISK.CRITICAL)}
+      ${tile("Verified", fmt(s.verified), "confirmed genuine", "#6366f1")}
+      ${tile("Leaked passwords", fmt(s.with_passwords), "breaches incl. passwords", RISK.HIGH)}</div>
+    <div class="sec"><span class="bar"></span><h4>Most recently disclosed</h4></div>
+    <table><thead><tr><th>Breach</th><th>Date</th><th>Severity</th><th>Accounts</th><th>Data exposed</th></tr></thead>
+      <tbody>${rows(s.latest)}</tbody></table>
+    <div class="sec"><span class="bar"></span><h4>Largest on record</h4></div>
+    <table><thead><tr><th>Breach</th><th>Date</th><th>Severity</th><th>Accounts</th><th>Data exposed</th></tr></thead>
+      <tbody>${rows(s.largest)}</tbody></table>
+    <div class="sec"><span class="bar"></span><h4>Most commonly leaked data types</h4></div>
+    ${bars((s.top_classes || []).map(c => ({ label: c.name, value: c.count, band: "HIGH" })))}
+    <div class="notice">Source: <b>${esc(s.source)}</b> — fetched live, cached for 24h.</div>`;
+  paint($("#brIntelResult"));
+}));
+
 /* ---- keyboard ----------------------------------------------------------
    Enter runs the analysis from a single-line field; Ctrl/Cmd+Enter does the
    same from a textarea (where a bare Enter must still insert a newline).   */
 const SUBMIT_FOR = { phText:"#phBtn", phSender:"#phBtn", phCompany:"#phBtn",
-  rsText:"#rsBtn", sgUrl:"#sgBtn", lgUrl:"#lgBtn", brEmail:"#brBtn" };
+  rsText:"#rsBtn", sgUrl:"#sgBtn", lgUrl:"#lgBtn", brEmail:"#brBtn",
+  brPwd:"#brPwdBtn" };
 
 document.addEventListener("keydown", e => {
   if (e.key !== "Enter") return;

@@ -133,6 +133,25 @@
       <button class="btn ghost" id="brOrgBtn">📡 Scan organisation</button>
     </div>
     <div id="brResult" style="margin-top:18px"></div>
+
+    <div class="sec"><span class="bar"></span><h4>Live password exposure — real breach data</h4></div>
+    <div class="notice">
+      <b>This one queries the real world.</b> Your password is hashed with SHA-1
+      <em>in this browser</em>; only the first 5 characters of that hash are sent to
+      Have I Been Pwned, and the match happens locally. The password and its full hash
+      never leave your machine — that is the <em>k-anonymity</em> model.
+    </div>
+    <div class="row">
+      <div style="flex:1"><label for="brPwd">Password to test against ~1&nbsp;billion real leaked credentials</label>
+        <input type="password" id="brPwd" autocomplete="off" spellcheck="false"
+               placeholder="type a password — never transmitted"></div>
+    </div>
+    <div style="margin-top:14px">
+      <button class="btn" id="brPwdBtn">🔐 Check against real breaches</button>
+      <button class="btn ghost" id="brIntelBtn">🌐 Load live threat intel</button>
+    </div>
+    <div id="brPwdResult" style="margin-top:18px"></div>
+    <div id="brIntelResult" style="margin-top:18px"></div>
   </section>
 </main>
 

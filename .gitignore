@@ -4,3 +4,6 @@ __pycache__/
 .DS_Store
 *.log
 .streamlit/secrets.toml
+
+# Runtime cache of the live HIBP breach register (regenerates on demand)
+breachradar/data/hibp_catalogue.json

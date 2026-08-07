@@ -1,6 +1,6 @@
 # 🛡️ JMD Security Suite
 
-![tests](https://img.shields.io/badge/tests-54%20passing-brightgreen)
+![tests](https://img.shields.io/badge/tests-70%20passing-brightgreen)
 ![python](https://img.shields.io/badge/python-3.14-blue)
 ![license](https://img.shields.io/badge/license-MIT-green)
 ![docker](https://img.shields.io/badge/docker-ready-2496ED)
@@ -91,7 +91,7 @@ Verified by 11 dedicated tests in `api/tests/test_security.py`.
 ```bash
 ./run.sh setup     # install deps (already done)
 ./run.sh data      # build BreachRadar corpus (already done)
-./run.sh test      # run all 54 tests
+./run.sh test      # run all 70 tests
 ./run.sh demo      # CLI demo of the four suite tools
 
 # individual dashboards (also available standalone)
@@ -101,7 +101,9 @@ Verified by 11 dedicated tests in `api/tests/test_security.py`.
 ### REST API endpoints
 `GET /health` · `GET /version` · `GET /tools` · `POST /phishguard/analyze` · `POST /resumeshield/redact`
 · `POST /siteguard/scan` · `POST /linkguard/analyze` · `POST /breachradar/check`
-· `GET /breachradar/scan-org` — interactive Swagger docs at `/docs`.
+· `GET /breachradar/scan-org` · `GET /breachradar/range/{prefix}` (live HIBP)
+· `GET /breachradar/catalogue` (live HIBP) · `POST /breachradar/live-check` (needs `HIBP_API_KEY`)
+— interactive Swagger docs at `/docs`.
 The `POST` analysis routes require an `X-API-Key` header when `JMD_API_KEY` is set (see [API hardening](#-api-hardening)).
 
 ---
@@ -143,6 +145,29 @@ Credential-exposure monitor over a **local, synthetic** breach corpus (offline &
 - Org-wide scan + per-account remediation advice.
 - `python -m breachradar.cli scan-org` · `streamlit run breachradar/app.py`
 
+### 🌐 Live mode — real breach data (`breachradar/live.py`)
+The synthetic corpus stays the default so demos and tests are deterministic. Alongside it,
+BreachRadar connects to the **real** Have I Been Pwned register using the two endpoints that
+are free and keyless:
+
+| Capability | Endpoint | Real? | Key needed |
+|---|---|---|---|
+| Password exposure (k-anonymity) | `GET /breachradar/range/{prefix5}` | ✅ live | none |
+| Breach register + statistics | `GET /breachradar/catalogue` | ✅ live, 24h cached | none |
+| Per-account breach lookup | `POST /breachradar/live-check` | ✅ live | `HIBP_API_KEY` (paid) |
+
+**The password check is genuinely private.** The browser hashes the password with
+SubtleCrypto, sends only the **first 5 hex characters** of the SHA-1 upstream, and matches the
+remaining 35 locally. Neither this server nor HIBP can determine which password was tested —
+that is the k-anonymity model the synthetic corpus was already modelled on, now pointed at the
+real thing. Typing `password123` returns its true count of **2,266,543** sightings.
+
+Operational safeguards: 10s timeouts, one polite retry (incl. on HIBP's 429), a 24h on-disk
+cache so normal use makes no network calls, and every failure raised as `LiveDataUnavailable`
+so callers fall back to synthetic data instead of erroring. The paid lookup refuses to run
+without a key rather than returning a false "clean" result. All 16 live-layer tests inject a
+stub fetcher, so `./run.sh test` still needs no network.
+
 ---
 
 ## 🤖 Role of AI
@@ -154,12 +179,18 @@ is written up in **[`reports/AI_IN_SECURITY.md`](reports/AI_IN_SECURITY.md)**.
 - **Explainable:** every verdict lists the concrete signals behind it.
 - **Safe by default:** no destructive actions; live scanning requires authorization;
   breach data is synthetic; PII is redacted, never stored.
-- **Tested:** 54 standalone tests (`./run.sh test`), no network required.
+- **Tested:** 70 standalone tests (`./run.sh test`), no network required — the live-data
+  layer is tested through an injected fetcher.
 - **Hardened:** the API ships with key auth, rate limiting, security headers and input caps.
 - **Reproducible:** seeded datasets, pinned deps, Python 3.14.
 
 ## Honest scope note
-Datasets/corpora here are synthetic so the suite is self-contained and reproducible.
-The transferable value is the detection logic, the privacy-preserving design, and the
-analyst workflow — all of which apply directly to real candidate data, real domains,
-and a real breach feed when connected.
+Most corpora here are synthetic so the suite is self-contained and reproducible — and three
+of the five tools already operate on real input by design: **ResumeShield** redacts real
+resumes, **SiteGuard** scans real domains once authorized, and **LinkGuard**'s lexical
+analysis works on any real URL. **BreachRadar** now also queries the real HIBP register
+(see [Live mode](#-live-mode--real-breach-data-breachradarlivepy)).
+
+What remains synthetic: PhishGuard's ML training corpus and LinkGuard's URL model (their
+reported metrics are therefore optimistic — the deterministic rules carry the real weight),
+and BreachRadar's default per-account corpus, since email→breach lookup is a paid HIBP tier.

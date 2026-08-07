@@ -80,6 +80,40 @@ def org_emails() -> list[str]:
     return _radar().org_emails
 
 
+# --- REAL data (Have I Been Pwned) -----------------------------------------
+# Opt-in live feeds. Everything above stays on the offline synthetic corpus so
+# demos and tests are deterministic; these two talk to the real register.
+_hibp_client = None
+
+
+def _hibp():
+    global _hibp_client
+    if _hibp_client is None:
+        from breachradar.live import HibpClient
+        _hibp_client = HibpClient()
+    return _hibp_client
+
+
+def breachradar_range(prefix: str) -> str:
+    """Relay a 5-char SHA-1 prefix to HIBP's Pwned Passwords range API.
+
+    The caller (browser) hashes the password and matches the suffix locally, so
+    neither this server nor HIBP ever sees the password or its full hash.
+    """
+    return _hibp().range_raw(prefix)
+
+
+def breachradar_catalogue(refresh: bool = False) -> dict:
+    """Headline stats computed from the real HIBP breach register."""
+    from breachradar.live import summarise
+    return summarise(_hibp().catalogue(refresh=refresh)).to_dict()
+
+
+def breachradar_live_account(email: str) -> list[dict]:
+    """Real per-account breaches. Needs a paid HIBP_API_KEY; raises otherwise."""
+    return _hibp().account_breaches(email)
+
+
 TOOLS = [
     {"key": "phishguard", "icon": "🛡️", "name": "PhishGuard",
      "desc": "Detects fake job offers, recruitment scams & phishing impersonating the firm.",
