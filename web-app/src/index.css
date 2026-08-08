@@ -1,0 +1,127 @@
+@import "tailwindcss";
+
+/* ============================================================================
+   Design tokens — exposed to Tailwind as utilities (bg-surface, text-accent…)
+   ========================================================================== */
+@theme {
+  --color-base: #000000;
+  --color-surface: #0a0a0a;
+  --color-card: #111111;
+  --color-elevated: #1a1a1a;
+
+  --color-accent: #00a3ff;
+  --color-violet: #7b61ff;
+  --color-live: #00ff94;
+  --color-danger: #ff3b5c;
+
+  --color-ink: #fafafa;
+  --color-ink-2: #a1a1aa;
+  --color-ink-3: #52525b;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --animate-marquee: marquee 38s linear infinite;
+  --animate-shimmer: shimmer 2.6s ease-in-out infinite;
+  --animate-spin-slow: spin 26s linear infinite;
+  --animate-spin-slower: spin 44s linear infinite reverse;
+  --animate-dash: dash 2.6s linear infinite;
+  --animate-pulse-ring: pulseRing 2.6s ease-out infinite;
+  --animate-float: float 7s ease-in-out infinite;
+  --animate-border-spin: borderSpin 7s linear infinite;
+  --animate-blink: blink 1.15s step-end infinite;
+  --animate-rise: rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes marquee   { from { transform: translateX(0) }        to { transform: translateX(-50%) } }
+@keyframes shimmer   { 0%,100% { transform: translateX(-120%) } 55%,100% { transform: translateX(220%) } }
+@keyframes dash      { to { stroke-dashoffset: -24 } }
+@keyframes pulseRing { 0% { transform: scale(.72); opacity: .85 } 100% { transform: scale(2.1); opacity: 0 } }
+@keyframes float     { 0%,100% { transform: translateY(0) }      50% { transform: translateY(-9px) } }
+@keyframes borderSpin{ to { --angle: 360deg } }
+@keyframes blink     { 0%,100% { opacity: 1 }                    50% { opacity: 0 } }
+@keyframes rise      { from { opacity: 0; transform: translateY(16px) } to { opacity: 1; transform: none } }
+
+/* ============================================================================
+   Base
+   ========================================================================== */
+@layer base {
+  html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+  body {
+    background: var(--color-base);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+  }
+  ::selection { background: color-mix(in srgb, var(--color-accent) 32%, transparent); }
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 3px;
+    border-radius: 6px;
+  }
+  ::-webkit-scrollbar { width: 11px; height: 11px }
+  ::-webkit-scrollbar-track { background: var(--color-base) }
+  ::-webkit-scrollbar-thumb {
+    background: #27272a; border-radius: 99px;
+    border: 3px solid var(--color-base); background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: #3f3f46; background-clip: content-box }
+}
+
+@layer utilities {
+  /* Faint dot grid — the "technical surface" texture, kept at ~4% so it reads
+     as material rather than as decoration. */
+  .dot-grid {
+    background-image: radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.10) 1px, transparent 0);
+    background-size: 32px 32px;
+  }
+  .blueprint {
+    background-image:
+      linear-gradient(rgba(0, 163, 255, 0.07) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 163, 255, 0.07) 1px, transparent 1px);
+    background-size: 46px 46px;
+  }
+  .text-gradient {
+    background: linear-gradient(105deg, #fff 8%, #fff 42%, #71717a 100%);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+  }
+  .text-gradient-accent {
+    background: linear-gradient(105deg, var(--color-accent), var(--color-violet));
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+  }
+  /* Rotating conic border. @property makes --angle animatable; browsers without
+     it simply render a static gradient border, which still looks intentional. */
+  .conic-border {
+    position: relative; isolation: isolate;
+  }
+  .conic-border::before {
+    content: ""; position: absolute; inset: -1px; border-radius: inherit; z-index: -1;
+    background: conic-gradient(from var(--angle, 0deg),
+      transparent 0%, var(--color-accent) 12%, var(--color-violet) 26%, transparent 42%);
+    animation: var(--animate-border-spin);
+  }
+  .mask-fade-x {
+    mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  }
+}
+
+@property --angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+/* Honour the OS setting: every effect above is decorative. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

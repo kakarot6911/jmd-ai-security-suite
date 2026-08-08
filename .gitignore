@@ -7,3 +7,7 @@ __pycache__/
 
 # Runtime cache of the live HIBP breach register (regenerates on demand)
 breachradar/data/hibp_catalogue.json
+
+# Vite build output for the landing page (regenerate with ./run.sh ui)
+web-dist/
+web-app/node_modules/

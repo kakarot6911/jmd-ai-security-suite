@@ -12,7 +12,7 @@ from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -28,7 +28,8 @@ app = FastAPI(
     version=VERSION,
     description="Unified endpoint for PhishGuard, ResumeShield, SiteGuard, LinkGuard and BreachRadar.",
 )
-WEB_DIR = ROOT / "web"
+WEB_DIR = ROOT / "web"                 # operator console (vanilla JS)
+LANDING_DIR = ROOT / "web-dist"        # marketing site (vite build output)
 
 # Analysis endpoints that require an API key (when JMD_API_KEY is set) and are
 # rate-limited. GET metadata routes (/health, /version, /tools) and the static
@@ -197,6 +198,28 @@ def breachradar_live_check(inp: EmailIn):
         raise HTTPException(503, str(e))
 
 
-# ---- Static web frontend (mounted LAST so API routes take precedence) -----
+@app.get("/console", include_in_schema=False)
+def console_redirect():
+    """Send /console to /console/.
+
+    A StaticFiles mount at "/console" resolves a request for exactly "/console"
+    to an empty sub-path and answers 404, so without this the bare URL — which is
+    what people type and what the landing page links to — would break.
+    """
+    return RedirectResponse("/console/", status_code=308)
+
+
+# ---- Static frontends (mounted LAST so API routes take precedence) --------
+# Two surfaces are served:
+#   /console  the operator console (vanilla JS, talks to the API above)
+#   /         the marketing site (React build output, if it has been built)
+# Order matters: "/console" must be registered before the catch-all "/".
+# When web-dist/ is absent (no `npm run build` yet) the console takes "/" so the
+# suite still serves a working UI straight from a clone.
 if WEB_DIR.exists():
-    app.mount("/", StaticFiles(directory=str(WEB_DIR), html=True), name="web")
+    app.mount("/console", StaticFiles(directory=str(WEB_DIR), html=True), name="web")
+
+if LANDING_DIR.exists():
+    app.mount("/", StaticFiles(directory=str(LANDING_DIR), html=True), name="landing")
+elif WEB_DIR.exists():
+    app.mount("/", StaticFiles(directory=str(WEB_DIR), html=True), name="web-root")

@@ -88,8 +88,41 @@ def test_web_frontend_present_and_mounted():
     import api.main as apimod
     assert apimod.WEB_DIR.exists()
     mounts = [r for r in apimod.app.routes if getattr(r, "name", "") == "web"]
-    assert mounts, "web StaticFiles mount not registered"
+    assert mounts, "console StaticFiles mount not registered"
+    # The console moved to /console so the React landing page can own "/".
+    assert mounts[0].path == "/console", mounts[0].path
 
+    names = [getattr(r, "name", "") for r in apimod.app.routes]
+    if apimod.LANDING_DIR.exists():
+        assert "landing" in names, "web-dist exists but is not mounted at /"
+        # /console must be registered before the catch-all, or it is shadowed.
+        # Starlette stores a "/" mount with an empty path, hence the "" here.
+        order = [getattr(r, "name", "") for r in apimod.app.routes
+                 if getattr(r, "name", "") in ("web", "landing")]
+        assert order.index("web") < order.index("landing"), order
+    else:
+        # Without a build, the console must still answer at "/" so a fresh
+        # clone serves a working UI.
+        assert "web-root" in names, "no frontend mounted at /"
+
+
+
+def test_console_bare_url_redirects_not_404():
+    """A StaticFiles mount at /console answers 404 for exactly "/console".
+
+    That is the URL people type and the one the landing page links to, so an
+    explicit redirect must exist ahead of the mounts.
+    """
+    import api.main as apimod
+
+    route = next((r for r in apimod.app.routes
+                  if getattr(r, "path", None) == "/console"
+                  and "GET" in (getattr(r, "methods", None) or set())), None)
+    assert route is not None, "no GET /console redirect route registered"
+
+    resp = route.endpoint()
+    assert resp.status_code == 308, resp.status_code
+    assert resp.headers["location"] == "/console/", resp.headers["location"]
 
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
